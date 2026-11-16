@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import santaImg from './assets/santa.png';
+import santaTorse from './assets/santa_torse.png';
+import santaJambeA from './assets/santa_jambeA.png';
+import santaJambeB from './assets/santa_jambeB.png';
 import tree1Img from './assets/tree1.png';
 import tree2Img from './assets/tree2.png';
 import fondImg from './assets/fond.jpg';
@@ -110,10 +112,14 @@ export function createStage(container, cb) {
   /* Père Noël : rendu 3D détouré (image générée avec Magnific), animé en volume dans la scène */
   const santa = new THREE.Group(); const rig = new THREE.Group(); santa.add(rig);
   const SH = 2.7, SW = SH * 0.75;
-  const santaTex = new THREE.TextureLoader().load(santaImg); santaTex.colorSpace = THREE.SRGBColorSpace; santaTex.anisotropy = 8;
+  const stTex = (u) => { const x = new THREE.TextureLoader().load(u); x.colorSpace = THREE.SRGBColorSpace; x.anisotropy = 8; return x; };
   const santaGeo = new THREE.PlaneGeometry(SW, SH); santaGeo.translate(0, SH / 2, 0);
-  const body = new THREE.Mesh(santaGeo, new THREE.MeshBasicMaterial({ map: santaTex, transparent: true, side: THREE.DoubleSide, color: 0xe4ecff, depthWrite: false }));
-  rig.add(body);
+  const part = (u, order) => { const m = new THREE.Mesh(santaGeo, new THREE.MeshBasicMaterial({ map: stTex(u), transparent: true, side: THREE.DoubleSide, color: 0xe4ecff, depthWrite: false })); m.renderOrder = order; return m; };
+  const body = new THREE.Group(); rig.add(body);
+  // jambes articulées aux hanches (pivot au haut de la jambe), dessinées derrière le torse
+  const hip = (px, py, u) => { const g = new THREE.Group(); g.position.set((px / 600 - 0.5) * SW, (1 - py / 800) * SH, 0); const m = part(u, 5); m.position.set(-g.position.x, -g.position.y, 0); g.add(m); body.add(g); return g; };
+  const legA = hip(245, 532, santaJambeA), legB = hip(370, 532, santaJambeB);
+  const torse = part(santaTorse, 6); body.add(torse);
   const SC = 0.8; santa.scale.setScalar(SC); scene.add(santa);
   const spot = (px, py) => { const o = new THREE.Object3D(); o.position.set((px / 600 - 0.5) * SW, (1 - py / 800) * SH, 0.05); rig.add(o); return o; };
   const mits = [spot(160, 170), spot(505, 470)]; // sac de cadeaux, main libre
@@ -124,7 +130,6 @@ export function createStage(container, cb) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.6), additive(new THREE.MeshBasicMaterial({ map: orTex, transparent: true, depthWrite: false, fog: false, opacity: 0 })));
     m.renderOrder = i ? 6 : 4; m.scale.x = i ? -1 : 1; scene.add(m); return m;
   });
-  body.renderOrder = 5;
 
   /* Neige + particules */
   const NN = 600; const np = new Float32Array(NN * 3), nv = new Float32Array(NN);
@@ -172,12 +177,17 @@ export function createStage(container, cb) {
 
   function pose(mode, t, m) {
     if (mode === 'run') {
-      const ph = t * 19, sn = Math.sin(ph);
-      body.position.y = Math.abs(sn) * 0.16; rig.rotation.set(0.06, 0, sn * 0.07);
+      const ph = t * 17, sn = Math.sin(ph);
+      legA.rotation.z = 0.38 + 0.4 * sn; legB.rotation.z = -0.45 - 0.45 * sn;
+      body.position.y = Math.abs(Math.cos(ph)) * 0.2; torse.rotation.z = -0.03 + Math.sin(ph + 0.6) * 0.04;
+      rig.rotation.set(0.08, 0, sn * 0.05);
     } else if (mode === 'jig') {
-      const ph = t * 7;
-      body.position.y = Math.abs(Math.sin(ph)) * 0.12; rig.rotation.set(0, Math.sin(t * 3) * 0.25, Math.sin(ph) * 0.06);
+      const ph = t * 7, sn = Math.sin(ph);
+      legA.rotation.z = 0.2 + 0.12 * sn; legB.rotation.z = -0.2 - 0.12 * sn;
+      body.position.y = Math.abs(sn) * 0.12; torse.rotation.z = Math.sin(ph) * 0.03;
+      rig.rotation.set(0, Math.sin(t * 3) * 0.25, Math.sin(ph) * 0.06);
     } else {
+      legA.rotation.z = 0.3; legB.rotation.z = -0.3; torse.rotation.z = 0;
       body.position.y = 0; rig.rotation.set(0, m * m * 30, 0);
     }
   }
