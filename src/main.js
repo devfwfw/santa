@@ -75,7 +75,8 @@ Hugo > Camille`;
 const QUAL = { leger: { label: 'Léger', size: 176, q: 0.6 }, standard: { label: 'Standard', size: 240, q: 0.66 }, fin: { label: 'Fin', size: 320, q: 0.72 } };
 const photos = new Map();   // nom normalisé → photo d'origine réduite (360 px), sert à fabriquer les miniatures
 const thumbs = new Map();   // nom|qualité → miniature carrée envoyée dans le lien
-const adminState = { text: '', rules: '', base: DEFAULT_BASE, quality: 'standard' };
+const DEFAULT_RULES = 'Budget maximum : 10 €\nMets le nom de ton ami secret dans le cadeau';
+const adminState = { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard' };
 let fromAdminFlag = false;
 
 /* Sauvegarde locale (navigateur de l'organisateur uniquement, rien n'est envoyé à un serveur) */
@@ -88,11 +89,11 @@ function saveAtelier() {
 function loadAtelier() {
   try {
     const d = JSON.parse(localStorage.getItem(STORE) || 'null'); if (!d) return;
-    adminState.text = d.t || ''; adminState.rules = d.r || ''; if (d.b) adminState.base = d.b; if (QUAL[d.q]) adminState.quality = d.q;
+    adminState.text = d.t || ''; adminState.rules = typeof d.r === 'string' ? d.r : DEFAULT_RULES; if (d.b) adminState.base = d.b; if (QUAL[d.q]) adminState.quality = d.q;
     Object.entries(d.p || {}).forEach(([k, v]) => photos.set(k, v));
   } catch (e) {}
 }
-function clearAtelier() { try { localStorage.removeItem(STORE); } catch (e) {} photos.clear(); thumbs.clear(); Object.assign(adminState, { text: '', rules: '', base: DEFAULT_BASE, quality: 'standard' }); }
+function clearAtelier() { try { localStorage.removeItem(STORE); } catch (e) {} photos.clear(); thumbs.clear(); Object.assign(adminState, { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard' }); }
 loadAtelier();
 
 function parseMap(text) {
@@ -193,7 +194,7 @@ function renderAdmin() {
   let armed = 0;
   $('#wipe').addEventListener('click', (e) => {
     if (!armed) { armed = 1; e.target.textContent = 'Confirmer l’effacement'; setTimeout(() => { armed = 0; e.target.textContent = 'Tout effacer'; }, 4000); return; }
-    clearAtelier(); armed = 0; e.target.textContent = 'Tout effacer'; map.value = ''; rules.value = ''; base.value = adminState.base; refresh(); toast('Atelier vidé.');
+    clearAtelier(); armed = 0; e.target.textContent = 'Tout effacer'; map.value = ''; rules.value = DEFAULT_RULES; base.value = adminState.base; refresh(); toast('Atelier vidé.');
   });
   $('#qual').querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => { adminState.quality = b.dataset.q; refresh(); }));
   refresh();
@@ -248,11 +249,17 @@ let stage = null;
 function renderReveal(data) {
   const isAdmin = fromAdminFlag; fromAdminFlag = false;
   document.title = `${APP} — ${TEAM}`;
-  const rules = (data.m || '').trim();
+  const rules = (data.m || DEFAULT_RULES).trim();
+  const items = rules.split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => `<li>${esc(l)}</li>`).join('');
   app.innerHTML = `${brand(isAdmin ? '<a class="back" href="#">← Atelier</a>' : '')}
-  <button class="info" id="info" aria-label="Règles du jeu" aria-expanded="false" aria-controls="rules">i</button>
-  <aside class="rules" id="rules" aria-hidden="true"><button class="close" id="rclose" aria-label="Fermer">×</button>
-    <h2>Règles du jeu</h2><div class="rules-body">${rules ? esc(rules).replace(/\n/g, '<br>') : '<p class="muted">Les règles seront affichées ici.</p>'}</div></aside>
+  <button class="info" id="info" aria-haspopup="dialog"><i>i</i><span>Règles du jeu</span></button>
+  <div class="modal" id="rules" role="dialog" aria-modal="true" aria-labelledby="rt" hidden>
+    <div class="modal-bg" data-close></div>
+    <div class="modal-card"><button class="close" data-close aria-label="Fermer">×</button>
+      <p class="eyebrow">${TEAM}</p><h2 id="rt">Règles du jeu</h2>
+      <ul class="rules-list">${items}</ul>
+      <p class="friend">Ton ami secret : <b>${esc(data.r)}</b></p>
+      <button class="btn" data-close>J'ai compris</button></div></div>
   <section class="reveal">
     <div class="canvas-wrap" id="cv"></div><div class="flash" id="flash"></div>
     <div class="ui">
@@ -274,9 +281,14 @@ function renderReveal(data) {
     </div>
   </section>`;
   const greet = $('#greet'), result = $('#result'), flash = $('#flash'), rulesEl = $('#rules'), info = $('#info');
-  const setRules = (open) => { rulesEl.classList.toggle('open', open); rulesEl.setAttribute('aria-hidden', String(!open)); info.setAttribute('aria-expanded', String(open)); info.classList.toggle('on', open); };
-  info.addEventListener('click', () => setRules(!rulesEl.classList.contains('open')));
-  $('#rclose').addEventListener('click', () => setRules(false));
+  let rtimer = 0;
+  const setRules = (open) => {
+    clearTimeout(rtimer); rulesEl.hidden = !open; info.setAttribute('aria-expanded', String(open));
+    if (open) { void rulesEl.offsetWidth; rulesEl.classList.add('open'); $('.btn', rulesEl).focus(); } else { rulesEl.classList.remove('open'); info.focus({ preventScroll: true }); }
+  };
+  info.addEventListener('click', () => setRules(true));
+  rulesEl.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) setRules(false); });
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !rulesEl.hidden) setRules(false); });
   $('#go').addEventListener('click', () => stage.magic());
   $('#again').addEventListener('click', () => { result.hidden = true; result.classList.remove('in', 'veil'); $('#after').hidden = true; stage.restart(); });
   $('#veil').addEventListener('click', (e) => { result.classList.toggle('veil'); e.target.textContent = result.classList.contains('veil') ? 'Révéler' : 'Cacher'; });
@@ -285,12 +297,12 @@ function renderReveal(data) {
     onClick() {},
     frameRect() { const f = $('.frame, .mono', result); return f ? f.getBoundingClientRect() : null; },
     onPhase(p) {
-      if (p === 'run') { greet.hidden = true; result.hidden = true; }
+      if (p === 'run') { greet.hidden = true; result.hidden = true; clearTimeout(rtimer); }
       if (p === 'greet') { greet.hidden = false; greet.classList.remove('out'); void greet.offsetWidth; greet.classList.add('in'); }
       if (p === 'magic') { greet.classList.add('out'); setTimeout(() => (greet.hidden = true), 400); }
       if (p === 'flash') { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
       if (p === 'reveal') { result.hidden = false; void result.offsetWidth; result.classList.add('in'); }
-      if (p === 'done') { $('#after').hidden = false; }
+      if (p === 'done') { $('#after').hidden = false; rtimer = setTimeout(() => setRules(true), 900); }
     },
   });
 }
