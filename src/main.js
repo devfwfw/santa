@@ -15,16 +15,24 @@ function pack(meta, photo) {
   new DataView(out.buffer).setUint32(0, j.length); out.set(j, 4); if (photo) out.set(photo, 4 + j.length);
   return out;
 }
-function toB36(bytes) {
-  let hex = '01'; for (const b of bytes) hex += b.toString(16).padStart(2, '0');
-  return BigInt('0x' + hex).toString(36);
+const B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', BIG62 = 62n ** 10n;
+const bytesToBig = (bytes) => { let hex = '01'; for (const b of bytes) hex += b.toString(16).padStart(2, '0'); return BigInt('0x' + hex); };
+const bigToBytes = (n) => { let hex = n.toString(16); if (hex.length % 2) hex = '0' + hex; const out = new Uint8Array(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16); return out.slice(1); };
+function toB62(bytes) {
+  let n = bytesToBig(bytes); const parts = [];
+  while (n > 0n) { let r = n % BIG62; n /= BIG62; let c = ''; for (let i = 0; i < 10; i++) { c = B62[Number(r % 62n)] + c; r /= 62n; } parts.push(c); }
+  return parts.reverse().join('').replace(/^0+/, '');
 }
+function fromB62(s) {
+  let n = 0n, pos = 0, len = s.length % 10 || 10;
+  while (pos < s.length) { const c = s.slice(pos, pos + len); pos += len; len = 10; let v = 0n; for (const ch of c) { const k = B62.indexOf(ch); if (k < 0) throw new Error('b62'); v = v * 62n + BigInt(k); } n = n * BIG62 + v; }
+  return bigToBytes(n);
+}
+// anciens liens (#s-…) : base 36
 function fromB36(s) {
   let n = 0n; const CH = 10;
   for (let i = 0; i < s.length; i += CH) { const c = s.slice(i, i + CH); n = n * (36n ** BigInt(c.length)) + BigInt(parseInt(c, 36)); }
-  let hex = n.toString(16); if (hex.length % 2) hex = '0' + hex;
-  const out = new Uint8Array(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
-  return out.slice(1);
+  return bigToBytes(n);
 }
 function unpack(bytes) {
   const len = new DataView(bytes.buffer, bytes.byteOffset).getUint32(0);
@@ -62,9 +70,28 @@ Sofia > Hugo
 Hugo > Camille`;
 
 /* ---------- ADMIN ---------- */
-const photos = new Map();
-const adminState = { text: '', rules: '', base: DEFAULT_BASE };
+const QUAL = { leger: { label: 'Léger', size: 176, q: 0.6 }, standard: { label: 'Standard', size: 240, q: 0.66 }, fin: { label: 'Fin', size: 320, q: 0.72 } };
+const photos = new Map();   // nom normalisé → photo d'origine réduite (360 px), sert à fabriquer les miniatures
+const thumbs = new Map();   // nom|qualité → miniature carrée envoyée dans le lien
+const adminState = { text: '', rules: '', base: DEFAULT_BASE, quality: 'standard' };
 let fromAdminFlag = false;
+
+/* Sauvegarde locale (navigateur de l'organisateur uniquement, rien n'est envoyé à un serveur) */
+const STORE = 'santa-magica-atelier-v1';
+function saveAtelier() {
+  const d = { t: adminState.text, r: adminState.rules, b: adminState.base === DEFAULT_BASE ? '' : adminState.base, q: adminState.quality };
+  try { localStorage.setItem(STORE, JSON.stringify({ ...d, p: Object.fromEntries(photos) })); }
+  catch (e) { try { localStorage.setItem(STORE, JSON.stringify(d)); toast('Photos trop lourdes pour la sauvegarde : le texte est enregistré, pas les photos.'); } catch (_) {} }
+}
+function loadAtelier() {
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE) || 'null'); if (!d) return;
+    adminState.text = d.t || ''; adminState.rules = d.r || ''; if (d.b) adminState.base = d.b; if (QUAL[d.q]) adminState.quality = d.q;
+    Object.entries(d.p || {}).forEach(([k, v]) => photos.set(k, v));
+  } catch (e) {}
+}
+function clearAtelier() { try { localStorage.removeItem(STORE); } catch (e) {} photos.clear(); thumbs.clear(); Object.assign(adminState, { text: '', rules: '', base: DEFAULT_BASE, quality: 'standard' }); }
+loadAtelier();
 
 function parseMap(text) {
   const pairs = [], errors = [];
@@ -85,19 +112,28 @@ function parseMap(text) {
   return { pairs, errors, people: [...people.values()] };
 }
 
-async function fileToThumb(file, size = 208) {
-  const bmp = await createImageBitmap(file);
-  const s = Math.min(bmp.width, bmp.height);
-  const c = document.createElement('canvas'); c.width = c.height = size;
-  c.getContext('2d').drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, size, size);
-  return c.toDataURL('image/jpeg', 0.66);
+async function fileToMaster(file) {
+  const bmp = await createImageBitmap(file); const s = Math.min(bmp.width, bmp.height), size = Math.min(360, s);
+  const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+  g.drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+async function makeThumb(master, size, q) {
+  const im = new Image(); im.src = master; await im.decode();
+  const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+  g.drawImage(im, 0, 0, im.width, im.height, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', q);
+}
+async function ensureThumbs() {
+  const Q = QUAL[adminState.quality];
+  for (const [k, master] of photos) { const key = k + '|' + adminState.quality; if (!thumbs.has(key)) { try { thumbs.set(key, await makeThumb(master, Q.size, Q.q)); } catch (e) {} } }
 }
 
 function linkFor(p) {
   const meta = { v: 2, g: p.g, r: p.r }; const rules = adminState.rules.trim(); if (rules) meta.m = rules;
-  const ph = photos.get(norm(p.r));
+  const ph = thumbs.get(norm(p.r) + '|' + adminState.quality);
   const base = (adminState.base || DEFAULT_BASE).split('#')[0];
-  return base + '#s-' + toB36(pack(meta, ph ? dataUrlToBytes(ph) : null));
+  return base + '#t-' + toB62(pack(meta, ph ? dataUrlToBytes(ph) : null));
 }
 
 function renderAdmin() {
@@ -114,7 +150,7 @@ function renderAdmin() {
       <h2><span class="num">01</span>La carte des duos</h2>
       <p class="hint">Une ligne par duo : <code>Celui qui offre &gt; Celui qui reçoit</code></p>
       <textarea id="map" rows="8" spellcheck="false" placeholder="Camille > Mehdi&#10;Mehdi > Inès&#10;…"></textarea>
-      <div class="row"><button class="btn ghost small" id="ex">Charger un exemple</button><span id="status" class="status"></span></div>
+      <div class="row"><button class="btn ghost small" id="ex">Charger un exemple</button><button class="btn ghost small" id="wipe">Tout effacer</button><span id="status" class="status"></span></div>
       <div id="errors"></div>
     </section>
 
@@ -127,6 +163,8 @@ function renderAdmin() {
     <section class="paper">
       <h2><span class="num">03</span>Les photos <small>(facultatif)</small></h2>
       <p class="hint">La photo de celui qui <b>reçoit</b> s'affiche à la révélation. Sans photo, ses initiales.</p>
+      <div class="seg" id="qual" role="group" aria-label="Qualité des photos">${Object.entries(QUAL).map(([k, v]) => `<button type="button" class="btn ghost small" data-q="${k}">${v.label}</button>`).join('')}</div>
+      <p class="hint" id="qualhint"></p>
       <div id="people" class="people"></div>
     </section>
 
@@ -136,18 +174,35 @@ function renderAdmin() {
       <label class="field">Adresse de l'application<input id="base" type="text" spellcheck="false"></label>
       <div id="links"></div>
     </section>
-    <footer class="foot">Prototype · aucune donnée n'est stockée : tout est contenu dans les liens.</footer>
+    <footer class="foot">L'atelier est enregistré sur cet appareil, dans ce navigateur : rien n'est envoyé à un serveur. Les données des duos vivent dans les liens.</footer>
   </main>`;
   const map = $('#map'), rules = $('#rules'), base = $('#base');
   map.value = adminState.text; rules.value = adminState.rules; base.value = adminState.base;
-  let tm;
-  const refresh = () => {
+  let tm, seq = 0;
+  const refresh = async () => {
+    const my = ++seq;
     adminState.text = map.value; adminState.rules = rules.value; adminState.base = base.value.trim() || DEFAULT_BASE;
-    const parsed = parseMap(map.value); renderStatus(parsed); renderPeople(parsed); renderLinks(parsed);
+    const parsed = parseMap(map.value); renderStatus(parsed);
+    await ensureThumbs(); if (my !== seq) return;
+    renderPeople(parsed); renderLinks(parsed); renderQual(); saveAtelier();
   };
   [map, rules, base].forEach((el) => el.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(refresh, 200); }));
   $('#ex').addEventListener('click', () => { map.value = EXAMPLE; refresh(); });
+  let armed = 0;
+  $('#wipe').addEventListener('click', (e) => {
+    if (!armed) { armed = 1; e.target.textContent = 'Confirmer l’effacement'; setTimeout(() => { armed = 0; e.target.textContent = 'Tout effacer'; }, 4000); return; }
+    clearAtelier(); armed = 0; e.target.textContent = 'Tout effacer'; map.value = ''; rules.value = ''; base.value = adminState.base; refresh(); toast('Atelier vidé.');
+  });
+  $('#qual').querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => { adminState.quality = b.dataset.q; refresh(); }));
   refresh();
+}
+
+let lastLens = [];
+function renderQual() {
+  document.querySelectorAll('#qual [data-q]').forEach((b) => { const on = b.dataset.q === adminState.quality; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  const Q = QUAL[adminState.quality];
+  const withPhoto = lastLens.filter((x) => x.ph).map((x) => x.n);
+  $('#qualhint').textContent = `Photo envoyée en ${Q.size} px : plus elle est fine, plus le lien est long.` + (withPhoto.length ? ` Lien moyen avec photo : ${Math.round(withPhoto.reduce((a, b) => a + b, 0) / withPhoto.length).toLocaleString('fr-FR')} caractères.` : '');
 }
 
 function renderStatus(parsed) {
@@ -167,18 +222,19 @@ function renderPeople(parsed) {
   }).join('');
   el.querySelectorAll('input[type=file]').forEach((inp) => inp.addEventListener('change', async () => {
     const f = inp.files[0]; if (!f) return;
-    try { photos.set(norm(inp.dataset.n), await fileToThumb(f)); } catch (e) { toast("Cette image n'a pas pu être lue."); return; }
-    const p = parseMap($('#map').value); renderPeople(p); renderLinks(p);
+    try { photos.set(norm(inp.dataset.n), await fileToMaster(f)); } catch (e) { toast("Cette image n'a pas pu être lue."); return; }
+    await ensureThumbs(); const p = parseMap($('#map').value); renderPeople(p); renderLinks(p); saveAtelier();
   }));
-  el.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { photos.delete(norm(b.dataset.rm)); const p = parseMap($('#map').value); renderPeople(p); renderLinks(p); }));
+  el.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { photos.delete(norm(b.dataset.rm)); const p = parseMap($('#map').value); renderPeople(p); renderLinks(p); saveAtelier(); }));
 }
 
 function renderLinks(parsed) {
   const el = $('#links');
   if (parsed.errors.length || !parsed.pairs.length) { el.innerHTML = `<p class="empty">${parsed.errors.length ? 'Corrigez la carte pour faire apparaître les liens.' : 'Les liens apparaîtront ici.'}</p>`; return; }
   const rows = parsed.pairs.map((p) => ({ p, url: linkFor(p) }));
+  lastLens = rows.map((r) => ({ n: r.url.length, ph: thumbs.has(norm(r.p.r) + '|' + adminState.quality) }));
   el.innerHTML = `<div class="row"><button class="btn small" id="all">Copier tous les liens</button></div>
-  <ul class="links">${rows.map((r, i) => `<li><div><b>${esc(r.p.g)}</b><small>${r.url.length > 3000 ? 'lien long (photo) · à envoyer par mail ou Teams' : 'lien court'}</small></div>
+  <ul class="links">${rows.map((r, i) => `<li><div><b>${esc(r.p.g)}</b><small>${r.url.length <= 3000 ? 'lien court' : r.url.length <= 6500 ? 'lien moyen (photo) · mail ou Teams' : 'lien long (photo) · mail ou Teams, pas SMS'} · ${r.url.length.toLocaleString('fr-FR')} caractères</small></div>
     <div class="acts"><button class="btn small" data-c="${i}">Copier le lien</button><button class="btn ghost small" data-v="${i}">Aperçu</button></div></li>`).join('')}</ul>`;
   el.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', async () => { const r = rows[+b.dataset.c]; await copyText(r.url); toast(`Lien copié — à envoyer en privé à ${first(r.p.g)}`); }));
   el.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => { fromAdminFlag = true; location.hash = rows[+b.dataset.v].url.split('#')[1]; }));
@@ -240,9 +296,9 @@ function renderReveal(data) {
 /* ---------- Routage ---------- */
 function route() {
   if (stage) { stage.dispose(); stage = null; }
-  const m = location.hash.match(/^#s-([0-9a-z]+)$/);
+  const m = location.hash.match(/^#([st])-([0-9A-Za-z]+)$/);
   if (m) {
-    let data = null; try { data = unpack(fromB36(m[1])); } catch (e) {}
+    let data = null; try { data = unpack(m[1] === 't' ? fromB62(m[2]) : fromB36(m[2])); } catch (e) {}
     if (data && data.g && data.r) { document.body.className = 'is-reveal'; renderReveal(data); return; }
     document.body.className = '';
     app.innerHTML = `${brand()}<main class="admin"><section class="paper"><h2>Ce lien est incomplet</h2><p>Le lien n'a pas pu être lu. Demandez à l'organisateur de vous le renvoyer en entier.</p><a class="btn" href="#">Aller à l'atelier</a></section></main>`;

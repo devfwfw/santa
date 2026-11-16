@@ -41,10 +41,10 @@ Pour rester proche d'un rendu « script » même si la police ne se charge pas, 
 
 ## Limites connues
 
-- Les liens contiennent leurs données encodées : à envoyer en message privé. Avec une photo, un lien fait environ 5 000 caractères (mail ou Teams, pas SMS).
-- Les photos sont réduites à 208 px, donc un peu douces à l'affichage.
-- La carte des duos n'est pas sauvegardée : fermer l'atelier la fait disparaître.
-- Hébergé dans un iframe qui ne garde que `#nom` dans l'adresse, les liens sont de la forme `#s-…` (lettres et chiffres uniquement).
+- Les liens contiennent leurs données encodées (base 62) : à envoyer en message privé. Avec une photo, un lien fait de 3 000 à 6 000 caractères selon la qualité choisie (mail ou Teams, pas SMS). Les anciens liens `#s-…` restent lisibles.
+- La qualité des photos se règle dans l'atelier (léger 176 px, standard 240 px, fin 320 px) : plus la photo est fine, plus le lien est long.
+- L'atelier (duos, règles, photos, adresse) est enregistré dans le navigateur de l'organisateur, sur cet appareil seulement. Le bouton « Tout effacer » le vide.
+- Les liens sont de la forme `#t-…` (lettres et chiffres uniquement), ce qui reste lisible même dans un iframe qui ne garde que `#nom` dans l'adresse.
 
 ## Idées pour la suite
 
