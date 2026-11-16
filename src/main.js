@@ -1,4 +1,5 @@
 import { createStage } from './stage.js';
+import colasLogo from './assets/colas.png';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -59,8 +60,8 @@ function toast(msg) {
 
 /* ---------- Marque ---------- */
 function brand(extra = '') {
-  return `<header class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10Z" fill="#C9A54C"/></svg>
-  <div><b>${APP}</b><small>${TEAM} · 2026</small></div>${extra}</header>`;
+  return `<header class="brand"><img class="logo" src="${colasLogo}" alt="Colas — We open the way">
+  <div class="sep" aria-hidden="true"></div><div class="ttl"><b>${APP}</b><small>${TEAM} · 2026</small></div>${extra}</header>`;
 }
 
 const EXAMPLE = `Camille > Mehdi
