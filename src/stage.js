@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import santaImg from './assets/santa.png';
+import tree1Img from './assets/tree1.png';
+import tree2Img from './assets/tree2.png';
+import fondImg from './assets/fond.jpg';
+import orImg from './assets/or.jpg';
 
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -54,10 +58,11 @@ export function createStage(container, cb) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const FOG = new THREE.Color(0x073b78);
-  scene.fog = new THREE.Fog(FOG, 9, 38);
+  const FOG = new THREE.Color(0x2a6a92);
+  scene.fog = new THREE.Fog(FOG, 10, 40);
+  container.style.background = `#021A39 url(${fondImg}) center / cover no-repeat`;
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
-  const LOOK = new THREE.Vector3(0, 0.55, 0);
+  const LOOK = new THREE.Vector3(0, 1.45, 0);
   let baseZ = 7;
   function resize() {
     const w = container.clientWidth || innerWidth, h = container.clientHeight || innerHeight;
@@ -73,12 +78,6 @@ export function createStage(container, cb) {
   const warm = new THREE.PointLight(0xffd98a, 14, 9, 1.6); scene.add(warm);
 
   /* Ciel, lune, étoiles */
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(160, 80), new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false, depthWrite: false }));
-  sky.position.set(0, 12, -50); scene.add(sky);
-  const moon = new THREE.Mesh(new THREE.CircleGeometry(1.5, 48), new THREE.MeshBasicMaterial({ color: 0xdbe9f2, fog: false }));
-  moon.position.set(-11, 13, -45); scene.add(moon);
-  const halo = new THREE.Sprite(additive(new THREE.SpriteMaterial({ map: softTexture(195, 224, 235), color: 0xC3E0EB, transparent: true, opacity: 0.5, depthWrite: false, fog: false })));
-  halo.scale.set(16, 16, 1); halo.position.copy(moon.position); halo.position.z += 0.2; scene.add(halo);
   const sTex = sparkleTexture();
   const mkStars = (n) => {
     const g = new THREE.BufferGeometry(), p = new Float32Array(n * 3);
@@ -87,22 +86,20 @@ export function createStage(container, cb) {
     const pts = new THREE.Points(g, additive(new THREE.PointsMaterial({ map: sTex, color: 0xffe9a8, size: 0.9, transparent: true, depthWrite: false, fog: false })));
     scene.add(pts); return pts;
   };
-  const starsA = mkStars(110), starsB = mkStars(110);
+  const starsA = mkStars(50), starsB = mkStars(50);
 
   /* Sol enneigé + sapins */
   const grad = toonGradient();
   const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: grad });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), toon(0x507B99));
-  ground.rotation.x = -Math.PI / 2; scene.add(ground);
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48), new THREE.MeshBasicMaterial({ map: softTexture(195, 224, 235), transparent: true, opacity: 0.4, depthWrite: false }));
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48), new THREE.MeshBasicMaterial({ map: softTexture(195, 224, 235), transparent: true, opacity: 0.35, depthWrite: false }));
   glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.02, 1.2); scene.add(glow);
-  const treeMats = [toon(0x2E6B4F), toon(0x1F4D3A)], snowM = toon(0xF2E8D5), trunkM = toon(0x4a3626);
+  /* Sapins : rendus 3D détourés (Magnific), plantés en volume dans la scène */
+  const loadTex = (u) => { const x = new THREE.TextureLoader().load(u); x.colorSpace = THREE.SRGBColorSpace; x.anisotropy = 8; return x; };
+  const treeMats = [tree1Img, tree2Img].map((u) => new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xb4c8f2 }));
+  const TH = 4.2, treeGeo = new THREE.PlaneGeometry(TH * 0.75, TH); treeGeo.translate(0, TH / 2 - 0.09 * TH, 0);
   function tree(x, z, s) {
-    const g = new THREE.Group();
-    [[1.05, 1.6, 1.1], [0.82, 1.4, 2.1], [0.58, 1.2, 3.0]].forEach(([r, h, y], i) => { const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), treeMats[i % 2]); c.position.y = y; g.add(c); });
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 7), snowM); cap.position.y = 3.75; g.add(cap);
-    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.6, 8), trunkM); tr.position.y = 0.3; g.add(tr);
-    g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = Math.random() * 6; scene.add(g);
+    const m = new THREE.Mesh(treeGeo, treeMats[Math.random() < 0.5 ? 0 : 1]);
+    m.position.set(x, 0, z); m.scale.set(s * (Math.random() < 0.5 ? -1 : 1), s, 1); scene.add(m);
   }
   for (let i = 0; i < 22; i++) {
     const z = 4 - i * 2.4, side = i % 2 ? 1 : -1;
@@ -120,6 +117,14 @@ export function createStage(container, cb) {
   const SC = 0.8; santa.scale.setScalar(SC); scene.add(santa);
   const spot = (px, py) => { const o = new THREE.Object3D(); o.position.set((px / 600 - 0.5) * SW, (1 - py / 800) * SH, 0.05); rig.add(o); return o; };
   const mits = [spot(160, 170), spot(505, 470)]; // sac de cadeaux, main libre
+
+  /* Traînées dorées scintillantes */
+  const orTex = loadTex(orImg);
+  const ribbons = [0, 1].map((i) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.6), additive(new THREE.MeshBasicMaterial({ map: orTex, transparent: true, depthWrite: false, fog: false, opacity: 0 })));
+    m.renderOrder = i ? 6 : 4; m.scale.x = i ? -1 : 1; scene.add(m); return m;
+  });
+  body.renderOrder = 5;
 
   /* Neige + particules */
   const NN = 600; const np = new Float32Array(NN * 3), nv = new Float32Array(NN);
@@ -210,6 +215,16 @@ export function createStage(container, cb) {
       if (m >= 1) { phase = 'done'; t0 = time; cb.onPhase('done'); }
     } else { vTarget = 0.26 + Math.sin(time * 1.3) * 0.04; santa.visible = false; }
     vortex += (vTarget - vortex) * Math.min(1, dt * 6);
+
+    // traînées dorées
+    const rb = phase === 'run' ? clamp(s / RUN) : phase === 'greet' ? 1 : phase === 'magic' ? 1 - smooth((s / MAGIC - 0.55) / 0.3) : 0;
+    ribbons.forEach((r, i) => {
+      const k = i ? 1 : -1, spin = phase === 'magic' ? (s / MAGIC) * (s / MAGIC) * 9 : 0, sc = (phase === 'magic' ? 1 + (s / MAGIC) * 1.6 : 0.9 + 0.1 * Math.sin(time * 1.5 + i)) * (i ? 0.9 : 1.1);
+      r.position.set(santa.position.x + k * 0.15, santa.position.y + 1.2, santa.position.z + k * 0.25);
+      r.rotation.z = (i ? 0.45 : -0.15) + Math.sin(time * 0.9 + i * 2) * 0.12 + k * spin;
+      r.scale.set((i ? -1 : 1) * sc, sc, 1);
+      r.material.opacity = rb * (i ? 1 : 1.4) * (0.85 + 0.15 * Math.sin(time * 4 + i));
+    });
 
     // lumière + astres
     warm.position.set(santa.position.x, santa.position.y + 2.2, santa.position.z + 2);
