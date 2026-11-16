@@ -1,0 +1,254 @@
+import { createStage } from './stage.js';
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+const first = (n) => n.trim().split(/\s+/)[0];
+const initials = (n) => { const p = n.trim().split(/\s+/); return ((p[0] || '')[0] || '').toUpperCase() + (p.length > 1 ? (p[p.length - 1][0] || '').toUpperCase() : ''); };
+const app = $('#app');
+const DEFAULT_BASE = (window.__BASE_URL__ || location.href.split('#')[0]);
+
+/* ---------- Encodage compact des liens (lettres + chiffres uniquement) ---------- */
+function pack(meta, photo) {
+  const j = new TextEncoder().encode(JSON.stringify(meta));
+  const out = new Uint8Array(4 + j.length + (photo ? photo.length : 0));
+  new DataView(out.buffer).setUint32(0, j.length); out.set(j, 4); if (photo) out.set(photo, 4 + j.length);
+  return out;
+}
+function toB36(bytes) {
+  let hex = '01'; for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+  return BigInt('0x' + hex).toString(36);
+}
+function fromB36(s) {
+  let n = 0n; const CH = 10;
+  for (let i = 0; i < s.length; i += CH) { const c = s.slice(i, i + CH); n = n * (36n ** BigInt(c.length)) + BigInt(parseInt(c, 36)); }
+  let hex = n.toString(16); if (hex.length % 2) hex = '0' + hex;
+  const out = new Uint8Array(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return out.slice(1);
+}
+function unpack(bytes) {
+  const len = new DataView(bytes.buffer, bytes.byteOffset).getUint32(0);
+  const meta = JSON.parse(new TextDecoder().decode(bytes.slice(4, 4 + len)));
+  const rest = bytes.slice(4 + len);
+  if (rest.length) meta.photoUrl = URL.createObjectURL(new Blob([rest], { type: 'image/jpeg' }));
+  return meta;
+}
+const dataUrlToBytes = (u) => Uint8Array.from(atob(u.split(',')[1]), (c) => c.charCodeAt(0));
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {
+    const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+let toastT;
+function toast(msg) {
+  let t = $('#toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+/* ---------- Marque ---------- */
+function brand(extra = '') {
+  return `<header class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10Z" fill="#C9A54C"/></svg>
+  <div><b>Santa Magica</b><small>Secret Santa · 2026</small></div>${extra}</header>`;
+}
+
+const EXAMPLE = `Camille > Mehdi
+Mehdi > Inès
+Inès > Julien
+Julien > Sofia
+Sofia > Hugo
+Hugo > Camille`;
+
+/* ---------- ADMIN ---------- */
+const photos = new Map();
+const adminState = { text: '', rules: '', base: DEFAULT_BASE };
+let fromAdminFlag = false;
+
+function parseMap(text) {
+  const pairs = [], errors = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    const l = line.trim(); if (!l || l.startsWith('#')) return;
+    const parts = l.split(/\s*(?:->|→|=>|>|;|\t|,)\s*/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length !== 2) { errors.push(`Ligne ${i + 1} : « ${l} » — format attendu : Celui qui offre > Celui qui reçoit`); return; }
+    pairs.push({ g: parts[0], r: parts[1], line: i + 1 });
+  });
+  const gs = new Map(), rs = new Map();
+  pairs.forEach((p) => {
+    if (norm(p.g) === norm(p.r)) errors.push(`Ligne ${p.line} : « ${p.g} » est associé(e) à lui/elle-même.`);
+    if (gs.has(norm(p.g))) errors.push(`« ${p.g} » apparaît deux fois comme donneur (lignes ${gs.get(norm(p.g))} et ${p.line}).`); else gs.set(norm(p.g), p.line);
+    if (rs.has(norm(p.r))) errors.push(`« ${p.r} » reçoit deux cadeaux (lignes ${rs.get(norm(p.r))} et ${p.line}).`); else rs.set(norm(p.r), p.line);
+  });
+  const people = new Map();
+  pairs.forEach((p) => [p.g, p.r].forEach((n) => { if (!people.has(norm(n))) people.set(norm(n), n); }));
+  return { pairs, errors, people: [...people.values()] };
+}
+
+async function fileToThumb(file, size = 208) {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(bmp.width, bmp.height);
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  c.getContext('2d').drawImage(bmp, (bmp.width - s) / 2, (bmp.height - s) / 2, s, s, 0, 0, size, size);
+  return c.toDataURL('image/jpeg', 0.66);
+}
+
+function linkFor(p) {
+  const meta = { v: 2, g: p.g, r: p.r }; const rules = adminState.rules.trim(); if (rules) meta.m = rules;
+  const ph = photos.get(norm(p.r));
+  const base = (adminState.base || DEFAULT_BASE).split('#')[0];
+  return base + '#s-' + toB36(pack(meta, ph ? dataUrlToBytes(ph) : null));
+}
+
+function renderAdmin() {
+  app.innerHTML = `${brand()}
+  <div class="snow" aria-hidden="true"></div>
+  <main class="admin">
+    <section class="hero">
+      <p class="eyebrow">Atelier de l'organisateur</p>
+      <h1>Secret Santa</h1>
+      <p class="lead">Collez la carte des duos. Chaque collègue reçoit un lien personnel : le Père Noël accourt, puis révèle son ami secret dans un tourbillon de neige scintillante.</p>
+    </section>
+
+    <section class="paper">
+      <h2><span class="num">01</span>La carte des duos</h2>
+      <p class="hint">Une ligne par duo : <code>Celui qui offre &gt; Celui qui reçoit</code></p>
+      <textarea id="map" rows="8" spellcheck="false" placeholder="Camille > Mehdi&#10;Mehdi > Inès&#10;…"></textarea>
+      <div class="row"><button class="btn ghost small" id="ex">Charger un exemple</button><span id="status" class="status"></span></div>
+      <div id="errors"></div>
+    </section>
+
+    <section class="paper">
+      <h2><span class="num">02</span>Règles du jeu <small>(facultatif)</small></h2>
+      <p class="hint">Affichées sur la page de chaque collègue, au clic sur le bouton « i ». Laissez vide pour l'instant.</p>
+      <textarea id="rules" rows="3" placeholder="Budget, date de l'échange…"></textarea>
+    </section>
+
+    <section class="paper">
+      <h2><span class="num">03</span>Les photos <small>(facultatif)</small></h2>
+      <p class="hint">La photo de celui qui <b>reçoit</b> s'affiche à la révélation. Sans photo, ses initiales.</p>
+      <div id="people" class="people"></div>
+    </section>
+
+    <section class="paper">
+      <h2><span class="num">04</span>Les liens</h2>
+      <p class="hint">Chaque lien est personnel et ne révèle que <b>la personne à offrir</b>. À envoyer en privé.</p>
+      <label class="field">Adresse de l'application<input id="base" type="text" spellcheck="false"></label>
+      <div id="links"></div>
+    </section>
+    <footer class="foot">Prototype · aucune donnée n'est stockée : tout est contenu dans les liens.</footer>
+  </main>`;
+  const map = $('#map'), rules = $('#rules'), base = $('#base');
+  map.value = adminState.text; rules.value = adminState.rules; base.value = adminState.base;
+  let tm;
+  const refresh = () => {
+    adminState.text = map.value; adminState.rules = rules.value; adminState.base = base.value.trim() || DEFAULT_BASE;
+    const parsed = parseMap(map.value); renderStatus(parsed); renderPeople(parsed); renderLinks(parsed);
+  };
+  [map, rules, base].forEach((el) => el.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(refresh, 200); }));
+  $('#ex').addEventListener('click', () => { map.value = EXAMPLE; refresh(); });
+  refresh();
+}
+
+function renderStatus(parsed) {
+  const s = $('#status'), e = $('#errors');
+  s.textContent = parsed.pairs.length && !parsed.errors.length ? `${parsed.pairs.length} duo${parsed.pairs.length > 1 ? 's' : ''} · ${parsed.people.length} personnes` : '';
+  e.innerHTML = parsed.errors.length ? `<ul class="errs">${parsed.errors.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+}
+
+function renderPeople(parsed) {
+  const el = $('#people');
+  if (!parsed.people.length) { el.innerHTML = '<p class="empty">Les participants apparaîtront ici dès que la carte sera remplie.</p>'; return; }
+  el.innerHTML = parsed.people.map((n) => {
+    const ph = photos.get(norm(n));
+    return `<div class="person"><div class="thumb">${ph ? `<img src="${ph}" alt="">` : `<span>${esc(initials(n))}</span>`}</div><b>${esc(n)}</b>
+      <label class="btn ghost small">${ph ? 'Changer' : 'Ajouter une photo'}<input type="file" accept="image/*" data-n="${esc(n)}" hidden></label>
+      ${ph ? `<button class="x" data-rm="${esc(n)}" aria-label="Retirer la photo de ${esc(n)}">×</button>` : ''}</div>`;
+  }).join('');
+  el.querySelectorAll('input[type=file]').forEach((inp) => inp.addEventListener('change', async () => {
+    const f = inp.files[0]; if (!f) return;
+    try { photos.set(norm(inp.dataset.n), await fileToThumb(f)); } catch (e) { toast("Cette image n'a pas pu être lue."); return; }
+    const p = parseMap($('#map').value); renderPeople(p); renderLinks(p);
+  }));
+  el.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { photos.delete(norm(b.dataset.rm)); const p = parseMap($('#map').value); renderPeople(p); renderLinks(p); }));
+}
+
+function renderLinks(parsed) {
+  const el = $('#links');
+  if (parsed.errors.length || !parsed.pairs.length) { el.innerHTML = `<p class="empty">${parsed.errors.length ? 'Corrigez la carte pour faire apparaître les liens.' : 'Les liens apparaîtront ici.'}</p>`; return; }
+  const rows = parsed.pairs.map((p) => ({ p, url: linkFor(p) }));
+  el.innerHTML = `<div class="row"><button class="btn small" id="all">Copier tous les liens</button></div>
+  <ul class="links">${rows.map((r, i) => `<li><div><b>${esc(r.p.g)}</b><small>${r.url.length > 3000 ? 'lien long (photo) · à envoyer par mail ou Teams' : 'lien court'}</small></div>
+    <div class="acts"><button class="btn small" data-c="${i}">Copier le lien</button><button class="btn ghost small" data-v="${i}">Aperçu</button></div></li>`).join('')}</ul>`;
+  el.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', async () => { const r = rows[+b.dataset.c]; await copyText(r.url); toast(`Lien copié — à envoyer en privé à ${first(r.p.g)}`); }));
+  el.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => { fromAdminFlag = true; location.hash = rows[+b.dataset.v].url.split('#')[1]; }));
+  $('#all').addEventListener('click', async () => { await copyText(rows.map((r) => `${r.p.g} : ${r.url}`).join('\n')); toast('Tous les liens sont copiés (un par ligne).'); });
+}
+
+/* ---------- RÉVÉLATION ---------- */
+let stage = null;
+function renderReveal(data) {
+  const isAdmin = fromAdminFlag; fromAdminFlag = false;
+  document.title = "Santa Magica — le Père Noël arrive";
+  const rules = (data.m || '').trim();
+  app.innerHTML = `${brand(isAdmin ? '<a class="back" href="#">← Atelier</a>' : '')}
+  <button class="info" id="info" aria-label="Règles du jeu" aria-expanded="false" aria-controls="rules">i</button>
+  <aside class="rules" id="rules" aria-hidden="true"><button class="close" id="rclose" aria-label="Fermer">×</button>
+    <h2>Règles du jeu</h2><div class="rules-body">${rules ? esc(rules).replace(/\n/g, '<br>') : '<p class="muted">Les règles seront affichées ici.</p>'}</div></aside>
+  <section class="reveal">
+    <div class="canvas-wrap" id="cv"></div><div class="flash" id="flash"></div>
+    <div class="ui">
+      <div class="greet" id="greet" hidden>
+        <p class="eyebrow">Bonjour ${esc(first(data.g))}</p>
+        <h1>C'est le temps du Père Noël&nbsp;!</h1>
+        <p class="lead">Ton ami secret est tout proche… Es-tu prêt(e) à le découvrir&nbsp;?</p>
+        <button class="btn big" id="go">Découvrir mon ami secret</button>
+      </div>
+      <div class="result" id="result" hidden>
+        <p class="eyebrow">Ton ami secret</p>
+        <div class="frame">${data.photoUrl ? `<img src="${data.photoUrl}" alt="Photo de ${esc(data.r)}">` : `<div class="mono">${esc(initials(data.r))}</div>`}</div>
+        <h1 class="name">${esc(data.r)}</h1>
+        <div class="after" id="after" hidden>
+          <p class="note">Chut… garde le secret jusqu'à l'échange des cadeaux.</p>
+          <div class="row center"><button class="btn ghost small" id="again">Rejouer la magie</button><button class="btn ghost small" id="veil">Cacher</button></div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+  const greet = $('#greet'), result = $('#result'), flash = $('#flash'), rulesEl = $('#rules'), info = $('#info');
+  const setRules = (open) => { rulesEl.classList.toggle('open', open); rulesEl.setAttribute('aria-hidden', String(!open)); info.setAttribute('aria-expanded', String(open)); info.classList.toggle('on', open); };
+  info.addEventListener('click', () => setRules(!rulesEl.classList.contains('open')));
+  $('#rclose').addEventListener('click', () => setRules(false));
+  $('#go').addEventListener('click', () => stage.magic());
+  $('#again').addEventListener('click', () => { result.hidden = true; result.classList.remove('in', 'veil'); $('#after').hidden = true; stage.restart(); });
+  $('#veil').addEventListener('click', (e) => { result.classList.toggle('veil'); e.target.textContent = result.classList.contains('veil') ? 'Révéler' : 'Cacher'; });
+
+  stage = createStage($('#cv'), {
+    onClick() {},
+    onPhase(p) {
+      if (p === 'run') { greet.hidden = true; result.hidden = true; }
+      if (p === 'greet') { greet.hidden = false; greet.classList.remove('out'); void greet.offsetWidth; greet.classList.add('in'); }
+      if (p === 'magic') { greet.classList.add('out'); setTimeout(() => (greet.hidden = true), 400); }
+      if (p === 'flash') { flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
+      if (p === 'reveal') { result.hidden = false; void result.offsetWidth; result.classList.add('in'); }
+      if (p === 'done') { $('#after').hidden = false; }
+    },
+  });
+}
+
+/* ---------- Routage ---------- */
+function route() {
+  if (stage) { stage.dispose(); stage = null; }
+  const m = location.hash.match(/^#s-([0-9a-z]+)$/);
+  if (m) {
+    let data = null; try { data = unpack(fromB36(m[1])); } catch (e) {}
+    if (data && data.g && data.r) { document.body.className = 'is-reveal'; renderReveal(data); return; }
+    document.body.className = '';
+    app.innerHTML = `${brand()}<main class="admin"><section class="paper"><h2>Ce lien est incomplet</h2><p>Le lien n'a pas pu être lu. Demandez à l'organisateur de vous le renvoyer en entier.</p><a class="btn" href="#">Aller à l'atelier</a></section></main>`;
+    return;
+  }
+  document.body.className = ''; document.title = 'Santa Magica — Atelier';
+  renderAdmin();
+}
+window.addEventListener('hashchange', route);
+route();

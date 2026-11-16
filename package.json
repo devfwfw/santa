@@ -1,0 +1,18 @@
+{
+  "name": "santa",
+  "version": "0.1.0",
+  "description": "Santa Magica : application Secret Santa avec révélation 3D (Père Noël, tourbillon de neige scintillante)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && node serve.mjs"
+  },
+  "dependencies": {
+    "@fontsource/montserrat": "^5.2.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

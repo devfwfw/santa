@@ -1,0 +1,8 @@
+node_modules/
+dist/
+# Polices sous licence : ne pas publier
+fonts/*.ttf
+fonts/*.otf
+fonts/*.woff
+fonts/*.woff2
+*.zip
