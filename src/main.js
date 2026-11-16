@@ -225,6 +225,7 @@ function renderReveal(data) {
 
   stage = createStage($('#cv'), {
     onClick() {},
+    frameRect() { const f = $('.frame, .mono', result); return f ? f.getBoundingClientRect() : null; },
     onPhase(p) {
       if (p === 'run') { greet.hidden = true; result.hidden = true; }
       if (p === 'greet') { greet.hidden = false; greet.classList.remove('out'); void greet.offsetWidth; greet.classList.add('in'); }

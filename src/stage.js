@@ -142,7 +142,7 @@ export function createStage(container, cb) {
   const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
   const parts = new THREE.Points(pGeo, additive(new THREE.PointsMaterial({ map: sTex, size: 0.34, vertexColors: true, transparent: true, depthWrite: false })));
   parts.frustumCulled = false; scene.add(parts);
-  const PCOL = [[1, 0.86, 0.5], [1, 0.95, 0.82], [1, 0.62, 0.4], [0.7, 1, 0.85]]; let pIdx = 0;
+  const PCOL = [[1, 0.8, 0.28], [1, 0.88, 0.45], [1, 0.72, 0.18], [1, 0.92, 0.6]]; let pIdx = 0;
   function emit(n, o, speed, burst, spread = 0.25) {
     for (let k = 0; k < n; k++) {
       const i = pIdx = (pIdx + 1) % PN;
@@ -162,9 +162,10 @@ export function createStage(container, cb) {
   }
   // tourbillon
   const VN = 2600; const vPos = new Float32Array(VN * 3), vCol = new Float32Array(VN * 3); const vd = [];
-  for (let i = 0; i < VN; i++) vd.push({ th: Math.random() * 6.28, h: Math.random(), r: 0.6 + Math.random() * 0.8, sp: 0.4 + Math.random() * 0.8, c: PCOL[(Math.random() * 4) | 0], mix: Math.random() });
+  for (let i = 0; i < VN; i++) vd.push({ arc: ((i % 4) / 4) * 6.283 + (Math.random() - 0.5) * 0.12, u: Math.pow(Math.random(), 1.3), off: Math.random(), sp: 1 + Math.random() * 0.06, c: PCOL[(Math.random() * 4) | 0] });
+  let rcx = 0, rcy = 1.3, rcz = 0.2, rhs = 1.2; const rv = new THREE.Vector3();
   const vGeo = new THREE.BufferGeometry(); vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3)); vGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
-  const vort = new THREE.Points(vGeo, additive(new THREE.PointsMaterial({ map: sTex, size: 0.2, vertexColors: true, transparent: true, depthWrite: false })));
+  const vort = new THREE.Points(vGeo, additive(new THREE.PointsMaterial({ map: sTex, size: 0.14, vertexColors: true, transparent: true, depthWrite: false })));
   vort.frustumCulled = false; scene.add(vort);
 
   /* État */
@@ -221,9 +222,9 @@ export function createStage(container, cb) {
       if (m > 0.2 && m < 0.85) emit(Math.round(240 * dt), tmp.set(santa.position.x, santa.position.y + 1.2, santa.position.z), 2.5, true, 0.6);
       if (!flashed && m >= 0.62) { flashed = true; emit(260, tmp.set(0, 2.2, 0.2), 5.5, true, 0.3); cb.onPhase('flash'); }
       if (!revealed && m >= 0.72) { revealed = true; santa.visible = false; cb.onPhase('reveal'); }
-      if (m > 0.85) vTarget = 1 - smooth((m - 0.85) / 0.15) * 0.74;
+      if (m > 0.85) vTarget = 1 - smooth((m - 0.85) / 0.15) * 0.08;
       if (m >= 1) { phase = 'done'; t0 = time; cb.onPhase('done'); }
-    } else { vTarget = 0.26 + Math.sin(time * 1.3) * 0.04; santa.visible = false; }
+    } else { vTarget = 0.9 + Math.sin(time * 1.3) * 0.08; santa.visible = false; }
     vortex += (vTarget - vortex) * Math.min(1, dt * 6);
 
     // traînées dorées
@@ -244,17 +245,30 @@ export function createStage(container, cb) {
       o.position.set(santa.position.x + Math.cos(a) * d.r, santa.position.y + d.h + Math.sin(time * 1.6 + d.ph) * 0.15, santa.position.z + Math.sin(a) * d.r * 0.8);
       const tw = 0.6 + Math.sin(time * 4 + d.ph) * 0.4; o.material.opacity = orb * tw; o.scale.setScalar(d.sz * (0.8 + tw * 0.4));
     });
-    // tourbillon
+    // anneau doré qui tourne autour de la photo (ou autour du Père Noël avant la révélation)
+    {
+      const W = container.clientWidth || innerWidth, Hh = container.clientHeight || innerHeight;
+      const fr = (phase === 'done' || revealed) && cb.frameRect ? cb.frameRect() : null;
+      let tx = santa.position.x, ty = santa.position.y + 1.3, ths = 1.2;
+      if (fr && fr.width > 20) {
+        camera.updateMatrixWorld();
+        rv.set(((fr.left + fr.width / 2) / W) * 2 - 1, -(((fr.top + fr.height / 2) / Hh) * 2 - 1), 0.5).unproject(camera).sub(camera.position).normalize();
+        const k = (0.2 - camera.position.z) / rv.z; tx = camera.position.x + rv.x * k; ty = camera.position.y + rv.y * k;
+        ths = (fr.width / 2) * (2 * (camera.position.z - 0.2) * Math.tan(THREE.MathUtils.degToRad(21)) / Hh);
+      }
+      const f = Math.min(1, dt * 5); rcx += (tx - rcx) * f; rcy += (ty - rcy) * f; rhs += (ths - rhs) * f;
+    }
     if (vortex > 0.01) {
       vort.visible = true;
       for (let i = 0; i < VN; i++) {
-        const d = vd[i]; const h = (d.h + time * 0.22 * d.sp) % 1;
-        const R = (0.25 + 2.9 * Math.pow(h, 1.15)) * d.r * (0.5 + 0.5 * vortex);
-        const th = d.th + time * (1.6 + 5 / (R + 0.5)) * (0.4 + vortex);
-        vPos[i * 3] = Math.cos(th) * R; vPos[i * 3 + 1] = h * 6.4; vPos[i * 3 + 2] = 0.2 + Math.sin(th) * R * 0.85;
-        const a = vortex * (0.35 + 0.65 * Math.sin(h * Math.PI)) * (0.55 + 0.45 * Math.sin(time * 6 + i));
-        const w = d.mix > 0.55 ? 1 : 0.55;
-        vCol[i * 3] = (d.mix > 0.55 ? 1 : d.c[0]) * a; vCol[i * 3 + 1] = (d.mix > 0.55 ? 1 : d.c[1]) * a * w + (1 - w) * a * 0.3; vCol[i * 3 + 2] = (d.mix > 0.55 ? 0.95 : d.c[2]) * a * (d.mix > 0.55 ? 1 : 0.8);
+        const d = vd[i]; const th = time * 1.15 * d.sp + d.arc - d.u * 2.3;
+        const c = Math.cos(th), sn = Math.sin(th);
+        const sc = rhs * (1.12 + 0.3 * d.off * (0.4 + d.u) + 0.04 * Math.sin(time * 2 + d.arc));
+        vPos[i * 3] = rcx + Math.sign(c) * Math.sqrt(Math.abs(c)) * sc;
+        vPos[i * 3 + 1] = rcy + Math.sign(sn) * Math.sqrt(Math.abs(sn)) * sc;
+        vPos[i * 3 + 2] = rcz + sn * 0.4 + (d.off - 0.5) * 0.3;
+        const a = vortex * 0.42 * Math.pow(1 - d.u, 1.1) * (0.55 + 0.45 * Math.sin(time * 7 + i));
+        vCol[i * 3] = d.c[0] * a; vCol[i * 3 + 1] = d.c[1] * a; vCol[i * 3 + 2] = d.c[2] * a;
       }
       vGeo.attributes.position.needsUpdate = true; vGeo.attributes.color.needsUpdate = true;
     } else vort.visible = false;
