@@ -106,7 +106,7 @@ function renderAdmin() {
   <main class="admin">
     <section class="hero">
       <p class="eyebrow">Atelier de l'organisateur</p>
-      <h1>Secret Santa</h1>
+      <h1><span class="spark">Secret Santa</span></h1>
       <p class="lead">Collez la carte des duos. Chaque collègue reçoit un lien personnel : le Père Noël accourt, puis révèle son ami secret dans un tourbillon de neige scintillante.</p>
     </section>
 
@@ -200,14 +200,14 @@ function renderReveal(data) {
     <div class="ui">
       <div class="greet" id="greet" hidden>
         <p class="eyebrow">Bonjour ${esc(first(data.g))}</p>
-        <h1>C'est le temps du Père Noël&nbsp;!</h1>
+        <h1><span class="spark">C'est le temps du Père Noël&nbsp;!</span></h1>
         <p class="lead">Ton ami secret est tout proche… Es-tu prêt(e) à le découvrir&nbsp;?</p>
         <button class="btn big" id="go">Découvrir mon ami secret</button>
       </div>
       <div class="result" id="result" hidden>
         <p class="eyebrow">Ton ami secret</p>
         <div class="frame">${data.photoUrl ? `<img src="${data.photoUrl}" alt="Photo de ${esc(data.r)}">` : `<div class="mono">${esc(initials(data.r))}</div>`}</div>
-        <h1 class="name">${esc(data.r)}</h1>
+        <h1 class="name spark">${esc(data.r)}</h1>
         <div class="after" id="after" hidden>
           <p class="note">Chut… garde le secret jusqu'à l'échange des cadeaux.</p>
           <div class="row center"><button class="btn ghost small" id="again">Rejouer la magie</button><button class="btn ghost small" id="veil">Cacher</button></div>

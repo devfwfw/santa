@@ -29,7 +29,7 @@ function softTexture(r = 255, g_ = 255, b = 255) {
 function skyTexture() {
   const c = document.createElement('canvas'); c.width = 8; c.height = 512;
   const g = c.getContext('2d'); const grd = g.createLinearGradient(0, 0, 0, 512);
-  grd.addColorStop(0, '#040d09'); grd.addColorStop(0.4, '#0a2018'); grd.addColorStop(0.7, '#1b4a38'); grd.addColorStop(0.71, '#18402f'); grd.addColorStop(1, '#14382b');
+  grd.addColorStop(0, '#010E25'); grd.addColorStop(0.4, '#021A39'); grd.addColorStop(0.7, '#043E8A'); grd.addColorStop(0.71, '#073b78'); grd.addColorStop(1, '#06305f');
   g.fillStyle = grd; g.fillRect(0, 0, 8, 512);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
@@ -53,7 +53,7 @@ export function createStage(container, cb) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const FOG = new THREE.Color(0x173d2f);
+  const FOG = new THREE.Color(0x073b78);
   scene.fog = new THREE.Fog(FOG, 9, 38);
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
   const LOOK = new THREE.Vector3(0, 0.55, 0);
@@ -67,16 +67,16 @@ export function createStage(container, cb) {
   window.addEventListener('resize', resize); resize();
 
   /* Lumières */
-  scene.add(new THREE.AmbientLight(0xbcd2ff, 0.75));
-  const moonLight = new THREE.DirectionalLight(0xdfe8ff, 1.5); moonLight.position.set(-4, 8, 6); scene.add(moonLight);
+  scene.add(new THREE.AmbientLight(0xa9c8ff, 0.8));
+  const moonLight = new THREE.DirectionalLight(0xd6e6ff, 1.5); moonLight.position.set(-4, 8, 6); scene.add(moonLight);
   const warm = new THREE.PointLight(0xffd98a, 14, 9, 1.6); scene.add(warm);
 
   /* Ciel, lune, étoiles */
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(160, 80), new THREE.MeshBasicMaterial({ map: skyTexture(), fog: false, depthWrite: false }));
   sky.position.set(0, 12, -50); scene.add(sky);
-  const moon = new THREE.Mesh(new THREE.CircleGeometry(1.5, 48), new THREE.MeshBasicMaterial({ color: 0xe6dcc6, fog: false }));
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(1.5, 48), new THREE.MeshBasicMaterial({ color: 0xdbe9f2, fog: false }));
   moon.position.set(-11, 13, -45); scene.add(moon);
-  const halo = new THREE.Sprite(additive(new THREE.SpriteMaterial({ map: softTexture(242, 232, 213), color: 0xF2E8D5, transparent: true, opacity: 0.5, depthWrite: false, fog: false })));
+  const halo = new THREE.Sprite(additive(new THREE.SpriteMaterial({ map: softTexture(195, 224, 235), color: 0xC3E0EB, transparent: true, opacity: 0.5, depthWrite: false, fog: false })));
   halo.scale.set(16, 16, 1); halo.position.copy(moon.position); halo.position.z += 0.2; scene.add(halo);
   const sTex = sparkleTexture();
   const mkStars = (n) => {
@@ -91,9 +91,9 @@ export function createStage(container, cb) {
   /* Sol enneigé + sapins */
   const grad = toonGradient();
   const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: grad });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), toon(0x6d8c7e));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), toon(0x507B99));
   ground.rotation.x = -Math.PI / 2; scene.add(ground);
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48), new THREE.MeshBasicMaterial({ map: softTexture(255, 236, 190), transparent: true, opacity: 0.32, depthWrite: false }));
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48), new THREE.MeshBasicMaterial({ map: softTexture(195, 224, 235), transparent: true, opacity: 0.4, depthWrite: false }));
   glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.02, 1.2); scene.add(glow);
   const treeMats = [toon(0x2E6B4F), toon(0x1F4D3A)], snowM = toon(0xF2E8D5), trunkM = toon(0x4a3626);
   function tree(x, z, s) {

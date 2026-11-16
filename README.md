@@ -27,13 +27,17 @@ Pour figer l'adresse utilisée dans les liens (par exemple l'adresse d'hébergem
 
 - `src/stage.js` : scène 3D (three.js) avec le Père Noël, la forêt, les étincelles et le tourbillon de neige.
 - `src/main.js` : atelier de l'organisateur, encodage des liens, page de révélation, panneau des règles.
-- `template.html` : styles (palette, Montserrat) et squelette de la page.
+- `template.html` : styles (bleu nuit, palette Père Noël, polices) et squelette de la page.
 - `build.mjs` : assemble tout dans `dist/index.html`.
 
 ## Polices
 
-- Montserrat (licence OFL) est intégrée automatiquement via le paquet `@fontsource/montserrat`.
-- Les titres utilisent « Merry Christmas Star » de Måns Grebäck (Aring Typeface). Sa licence est « usage personnel uniquement » : le fichier n'est donc pas dans ce dépôt. Déposer `MerryChristmasStar.ttf` dans `fonts/` avant le build (il est ignoré par git). Sans ce fichier, une police script de secours s'affiche. Pour un usage en entreprise, acheter la licence : http://www.aringtypeface.com/license/
+Toutes les polices sont libres de droits, y compris pour un usage en entreprise, et sont intégrées automatiquement au build par les paquets `@fontsource` :
+
+- Montserrat (texte) : licence SIL OFL 1.1.
+- Norican (titres, nom révélé, logo) : licence SIL OFL 1.1.
+
+Pour rester proche d'un rendu « script » même si la police ne se charge pas, les titres ont comme polices de secours des polices installées avec Windows et Office (Brush Script MT, Freestyle Script, Segoe Script). Elles ne sont pas intégrées au fichier : Microsoft vend une licence séparée pour les redistribuer dans un site ou une application. Pour les utiliser dans Word, Norican s'installe comme n'importe quelle police (fichier gratuit sur Google Fonts).
 
 ## Limites connues
 
