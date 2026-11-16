@@ -6,7 +6,7 @@ import fs from 'node:fs';
 const b64 = (p) => fs.readFileSync(p).toString('base64');
 const base = process.argv[2] || process.env.BASE_URL || '';
 
-const bundle = await build({ entryPoints: ['src/main.js'], bundle: true, minify: true, format: 'iife', write: false, logLevel: 'warning' });
+const bundle = await build({ entryPoints: ['src/main.js'], bundle: true, minify: true, format: 'iife', write: false, loader: { '.png': 'dataurl' }, logLevel: 'warning' });
 const js = bundle.outputFiles[0].text.replace(/<\/script>/g, '<\\/script>');
 
 let fonts = '';

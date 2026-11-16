@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import santaImg from './assets/santa.png';
 
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -109,44 +110,16 @@ export function createStage(container, cb) {
     if (i % 3 === 0) tree(-side * (6.5 + Math.random() * 6), z - 1, 1 + Math.random() * 0.7);
   }
 
-  /* Père Noël (procédural, style à aplats) */
-  const RED = toon(0xB3202A), RED2 = toon(0x8f1923), WHITE = toon(0xF2E8D5), SKIN = toon(0xe6c3a0), BLACK = toon(0x1a1a1a), GOLD = toon(0xC9A54C), SACK = toon(0x2E6B4F);
-  const M = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); return m; };
-  const ell = (r, sx, sy, sz, mat, x, y, z) => { const m = M(new THREE.SphereGeometry(r, 28, 20), mat, x, y, z); m.scale.set(sx, sy, sz); return m; };
+  /* Père Noël : rendu 3D détouré (image générée avec Magnific), animé en volume dans la scène */
   const santa = new THREE.Group(); const rig = new THREE.Group(); santa.add(rig);
-  const body = new THREE.Group(); body.position.y = 0.9; rig.add(body);          // pivot hanches
-  body.add(ell(1, 0.64, 0.7, 0.58, RED, 0, 0.4, 0));                               // torse
-  body.add(ell(1, 0.7, 0.62, 0.66, RED, 0, 0.18, 0.05));                           // ventre
-  const belt = M(new THREE.CylinderGeometry(0.7, 0.72, 0.13, 32, 1, true), BLACK, 0, 0.16, 0.05); belt.scale.z = 0.95; belt.material.side = THREE.DoubleSide; body.add(belt);
-  body.add(M(new THREE.BoxGeometry(0.22, 0.2, 0.05), GOLD, 0, 0.16, 0.7));
-  body.add(M(new THREE.BoxGeometry(0.12, 0.8, 0.05), WHITE, 0, 0.4, 0.66));        // bande de fourrure
-  const hem = M(new THREE.TorusGeometry(0.66, 0.08, 10, 36), WHITE, 0, -0.12, 0.04); hem.rotation.x = Math.PI / 2; hem.scale.y = 0.92; body.add(hem);
-  const sack = ell(1, 0.5, 0.55, 0.45, SACK, -0.45, 0.6, -0.5); body.add(sack);
-  body.add(M(new THREE.TorusGeometry(0.2, 0.04, 8, 16), GOLD, -0.45, 1.1, -0.5));
-  const legs = [-1, 1].map((s) => { const l = new THREE.Group(); l.position.set(s * 0.22, 0, 0); body.add(l);
-    l.add(M(new THREE.CylinderGeometry(0.17, 0.15, 0.62, 14), RED2, 0, -0.31, 0));
-    l.add(M(new THREE.BoxGeometry(0.3, 0.24, 0.5), BLACK, 0, -0.68, 0.08));
-    const cuff = M(new THREE.TorusGeometry(0.16, 0.05, 8, 18), WHITE, 0, -0.58, 0); cuff.rotation.x = Math.PI / 2; l.add(cuff); return l; });
-  const arms = [-1, 1].map((s) => { const a = new THREE.Group(); a.position.set(s * 0.62, 0.62, 0); body.add(a);
-    a.add(M(new THREE.CylinderGeometry(0.14, 0.12, 0.62, 12), RED, 0, -0.31, 0));
-    const c = M(new THREE.TorusGeometry(0.13, 0.05, 8, 16), WHITE, 0, -0.6, 0); c.rotation.x = Math.PI / 2; a.add(c);
-    const mit = M(new THREE.SphereGeometry(0.16, 16, 12), WHITE, 0, -0.76, 0); mit.name = 'mit'; a.add(mit); return a; });
-  const head = new THREE.Group(); head.position.y = 1.0; body.add(head);
-  head.add(ell(0.36, 1, 1, 1, SKIN, 0, 0.1, 0));
-  head.add(ell(0.38, 1.02, 0.85, 0.72, WHITE, 0, -0.12, 0.2));                      // barbe
-  [-1, 1].forEach((s) => {
-    head.add(ell(0.11, 1.3, 0.8, 0.9, WHITE, s * 0.1, 0.02, 0.36));                   // moustache
-    head.add(M(new THREE.SphereGeometry(0.035, 10, 8), BLACK, s * 0.14, 0.2, 0.32));  // yeux
-    const br = M(new THREE.BoxGeometry(0.14, 0.04, 0.05), WHITE, s * 0.14, 0.28, 0.33); br.rotation.z = -s * 0.2; head.add(br);
-    head.add(M(new THREE.SphereGeometry(0.05, 10, 8), toon(0xd88c80), s * 0.2, 0.1, 0.31)); // joues
-  });
-  head.add(M(new THREE.SphereGeometry(0.075, 12, 10), toon(0xd98a7c), 0, 0.12, 0.38));      // nez
-  const hat = new THREE.Group(); hat.position.set(0, 0.32, 0); hat.rotation.z = 0.28; head.add(hat);
-  hat.add(M(new THREE.ConeGeometry(0.38, 0.72, 20), RED, 0, 0.3, 0));
-  const trim = M(new THREE.TorusGeometry(0.36, 0.09, 10, 30), WHITE, 0, 0.0, 0); trim.rotation.x = Math.PI / 2; hat.add(trim);
-  hat.add(M(new THREE.SphereGeometry(0.12, 14, 12), WHITE, -0.02, 0.7, 0));
-  const SC = 0.78; santa.scale.setScalar(SC); scene.add(santa);
-  const mits = []; arms.forEach((a) => mits.push(a.getObjectByName('mit')));
+  const SH = 2.7, SW = SH * 0.75;
+  const santaTex = new THREE.TextureLoader().load(santaImg); santaTex.colorSpace = THREE.SRGBColorSpace; santaTex.anisotropy = 8;
+  const santaGeo = new THREE.PlaneGeometry(SW, SH); santaGeo.translate(0, SH / 2, 0);
+  const body = new THREE.Mesh(santaGeo, new THREE.MeshBasicMaterial({ map: santaTex, transparent: true, side: THREE.DoubleSide, color: 0xe4ecff, depthWrite: false }));
+  rig.add(body);
+  const SC = 0.8; santa.scale.setScalar(SC); scene.add(santa);
+  const spot = (px, py) => { const o = new THREE.Object3D(); o.position.set((px / 600 - 0.5) * SW, (1 - py / 800) * SH, 0.05); rig.add(o); return o; };
+  const mits = [spot(160, 170), spot(505, 470)]; // sac de cadeaux, main libre
 
   /* Neige + particules */
   const NN = 600; const np = new Float32Array(NN * 3), nv = new Float32Array(NN);
@@ -193,29 +166,15 @@ export function createStage(container, cb) {
   renderer.domElement.addEventListener('click', () => cb.onClick && cb.onClick());
 
   function pose(mode, t, m) {
-    const ph = mode === 'run' ? t * 19 : t * 7;
-    let by = 0;
     if (mode === 'run') {
-      const s = Math.sin(ph);
-      legs[0].rotation.x = s * 1.0; legs[1].rotation.x = -s * 1.0;
-      arms[0].rotation.z = -(1.5 + Math.sin(ph * 0.5) * 0.9); arms[1].rotation.z = 1.5 - Math.sin(ph * 0.5) * 0.9;
-      arms[0].rotation.x = s * 0.5; arms[1].rotation.x = -s * 0.5;
-      body.rotation.set(0.14, Math.sin(ph * 0.5) * 0.3, Math.sin(ph) * 0.06);
-      head.rotation.z = Math.sin(ph * 0.5) * 0.15;
-      by = Math.abs(s) * 0.16; rig.rotation.y = 0;
+      const ph = t * 19, sn = Math.sin(ph);
+      body.position.y = Math.abs(sn) * 0.16; rig.rotation.set(0.06, 0, sn * 0.07);
     } else if (mode === 'jig') {
-      const s = Math.sin(ph);
-      legs[0].rotation.x = s * 0.35; legs[1].rotation.x = -s * 0.35;
-      arms[1].rotation.z = 2.5 + Math.sin(ph * 2) * 0.35; arms[1].rotation.x = 0;     // il salue
-      arms[0].rotation.z = -(0.7 + Math.sin(ph) * 0.15); arms[0].rotation.x = 0.2;
-      body.rotation.set(0.04, Math.sin(t * 3) * 0.2, Math.sin(ph) * 0.07);
-      head.rotation.z = Math.sin(ph) * 0.12; by = Math.abs(Math.sin(ph)) * 0.15; rig.rotation.y = 0;
+      const ph = t * 7;
+      body.position.y = Math.abs(Math.sin(ph)) * 0.12; rig.rotation.set(0, Math.sin(t * 3) * 0.25, Math.sin(ph) * 0.06);
     } else {
-      legs[0].rotation.x = -0.4; legs[1].rotation.x = 0.4;
-      arms[0].rotation.z = -2.6; arms[1].rotation.z = 2.6; arms[0].rotation.x = arms[1].rotation.x = 0;
-      body.rotation.set(0, 0, 0); head.rotation.z = 0; rig.rotation.y = m * m * 30;
+      body.position.y = 0; rig.rotation.set(0, m * m * 30, 0);
     }
-    body.position.y = 0.9 + by;
   }
 
   function update(dt) {
