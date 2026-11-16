@@ -96,11 +96,14 @@ function loadAtelier() {
 function clearAtelier() { try { localStorage.removeItem(STORE); } catch (e) {} photos.clear(); thumbs.clear(); Object.assign(adminState, { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard' }); }
 loadAtelier();
 
+/* « NOM, Prénom » devient « Prénom NOM » pour l'affichage */
+const displayName = (s) => { const i = s.indexOf(','); return i < 0 ? s : `${s.slice(i + 1).trim()} ${s.slice(0, i).trim()}`.trim(); };
 function parseMap(text) {
   const pairs = [], errors = [];
   text.split(/\r?\n/).forEach((line, i) => {
     const l = line.trim(); if (!l || l.startsWith('#')) return;
-    const parts = l.split(/\s*(?:->|→|=>|>|;|\t|,)\s*/).map((s) => s.trim()).filter(Boolean);
+    const sep = /(?:->|→|=>|>)/.test(l) ? /\s*(?:->|→|=>|>)\s*/ : /\s*(?:;|\t|,)\s*/;
+    const parts = l.split(sep).map((s) => s.trim()).filter(Boolean).map(displayName);
     if (parts.length !== 2) { errors.push(`Ligne ${i + 1} : « ${l} » — format attendu : Celui qui offre > Celui qui reçoit`); return; }
     pairs.push({ g: parts[0], r: parts[1], line: i + 1 });
   });
@@ -151,7 +154,7 @@ function renderAdmin() {
 
     <section class="paper">
       <h2><span class="num">01</span>La carte des duos</h2>
-      <p class="hint">Une ligne par duo : <code>Celui qui offre &gt; Celui qui reçoit</code></p>
+      <p class="hint">Une ligne par duo : <code>NOM, Prénom &gt; NOM, Prénom</code> (celui qui offre &gt; celui qui reçoit)</p>
       <textarea id="map" rows="8" spellcheck="false" placeholder="Camille > Mehdi&#10;Mehdi > Inès&#10;…"></textarea>
       <div class="row"><button class="btn ghost small" id="ex">Charger un exemple</button><button class="btn ghost small" id="wipe">Tout effacer</button><span id="status" class="status"></span></div>
       <div id="errors"></div>
@@ -159,7 +162,7 @@ function renderAdmin() {
 
     <section class="paper">
       <h2><span class="num">02</span>Règles du jeu <small>(facultatif)</small></h2>
-      <p class="hint">Affichées sur la page de chaque collègue, au clic sur le bouton « i ». Laissez vide pour l'instant.</p>
+      <p class="hint">Affichées sur la page de chaque collègue, dans un popup à la révélation et via le bouton « Règles du jeu ». Une règle par ligne.</p>
       <textarea id="rules" rows="3" placeholder="Budget, date de l'échange…"></textarea>
     </section>
 
