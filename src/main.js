@@ -6,6 +6,7 @@ const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().tri
 const first = (n) => n.trim().split(/\s+/)[0];
 const initials = (n) => { const p = n.trim().split(/\s+/); return ((p[0] || '')[0] || '').toUpperCase() + (p.length > 1 ? (p[p.length - 1][0] || '').toUpperCase() : ''); };
 const app = $('#app');
+const APP = 'Mystère de Noël', TEAM = 'Team RH Colas';
 const DEFAULT_BASE = (window.__BASE_URL__ || location.href.split('#')[0]);
 
 /* ---------- Encodage compact des liens (lettres + chiffres uniquement) ---------- */
@@ -59,7 +60,7 @@ function toast(msg) {
 /* ---------- Marque ---------- */
 function brand(extra = '') {
   return `<header class="brand"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10Z" fill="#C9A54C"/></svg>
-  <div><b>Santa Magica</b><small>Secret Santa · 2026</small></div>${extra}</header>`;
+  <div><b>${APP}</b><small>${TEAM} · 2026</small></div>${extra}</header>`;
 }
 
 const EXAMPLE = `Camille > Mehdi
@@ -141,9 +142,9 @@ function renderAdmin() {
   <div class="snow" aria-hidden="true"></div>
   <main class="admin">
     <section class="hero">
-      <p class="eyebrow">Atelier de l'organisateur</p>
-      <h1><span class="spark">Secret Santa</span></h1>
-      <p class="lead">Collez la carte des duos. Chaque collègue reçoit un lien personnel : le Père Noël accourt, puis révèle son ami secret dans un tourbillon de neige scintillante.</p>
+      <p class="eyebrow">Atelier de l'organisateur · ${TEAM}</p>
+      <h1><span class="spark">${APP}</span></h1>
+      <p class="lead">Le Secret Santa de la ${TEAM}. Collez la carte des duos : chaque collègue reçoit un lien personnel, le Père Noël accourt et lui révèle son ami secret.</p>
     </section>
 
     <section class="paper">
@@ -245,7 +246,7 @@ function renderLinks(parsed) {
 let stage = null;
 function renderReveal(data) {
   const isAdmin = fromAdminFlag; fromAdminFlag = false;
-  document.title = "Santa Magica — le Père Noël arrive";
+  document.title = `${APP} — ${TEAM}`;
   const rules = (data.m || '').trim();
   app.innerHTML = `${brand(isAdmin ? '<a class="back" href="#">← Atelier</a>' : '')}
   <button class="info" id="info" aria-label="Règles du jeu" aria-expanded="false" aria-controls="rules">i</button>
@@ -255,17 +256,17 @@ function renderReveal(data) {
     <div class="canvas-wrap" id="cv"></div><div class="flash" id="flash"></div>
     <div class="ui">
       <div class="greet" id="greet" hidden>
-        <p class="eyebrow">Bonjour ${esc(first(data.g))}</p>
-        <h1><span class="spark">C'est le temps du Père Noël&nbsp;!</span></h1>
-        <p class="lead">Ton ami secret est tout proche… Es-tu prêt(e) à le découvrir&nbsp;?</p>
+        <p class="eyebrow">${TEAM} · Secret Santa</p>
+        <h1><span class="spark">Bonjour ${esc(first(data.g))}, le Père Noël a une mission pour toi&nbsp;!</span></h1>
+        <p class="lead">Tu fais partie des lutins de la ${TEAM} : quelqu'un compte sur toi pour son cadeau. Prêt(e) à découvrir ton ami secret&nbsp;?</p>
         <button class="btn big" id="go">Découvrir mon ami secret</button>
       </div>
       <div class="result" id="result" hidden>
-        <p class="eyebrow">Ton ami secret</p>
+        <p class="eyebrow">Tu offres un cadeau à</p>
         <div class="frame">${data.photoUrl ? `<img src="${data.photoUrl}" alt="Photo de ${esc(data.r)}">` : `<div class="mono">${esc(initials(data.r))}</div>`}</div>
         <h1 class="name spark">${esc(data.r)}</h1>
         <div class="after" id="after" hidden>
-          <p class="note">Chut… garde le secret jusqu'à l'échange des cadeaux.</p>
+          <p class="note">Chut… garde le secret jusqu'à l'échange des cadeaux de la ${TEAM}.</p>
           <div class="row center"><button class="btn ghost small" id="again">Rejouer la magie</button><button class="btn ghost small" id="veil">Cacher</button></div>
         </div>
       </div>
@@ -304,7 +305,7 @@ function route() {
     app.innerHTML = `${brand()}<main class="admin"><section class="paper"><h2>Ce lien est incomplet</h2><p>Le lien n'a pas pu être lu. Demandez à l'organisateur de vous le renvoyer en entier.</p><a class="btn" href="#">Aller à l'atelier</a></section></main>`;
     return;
   }
-  document.body.className = ''; document.title = 'Santa Magica — Atelier';
+  document.body.className = ''; document.title = `${APP} — Atelier`;
   renderAdmin();
 }
 window.addEventListener('hashchange', route);

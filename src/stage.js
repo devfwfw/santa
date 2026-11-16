@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import santaTorse from './assets/santa_torse.png';
 import santaJambeA from './assets/santa_jambeA.png';
 import santaJambeB from './assets/santa_jambeB.png';
-import tree1Img from './assets/tree1.png';
-import tree2Img from './assets/tree2.png';
+import tree1Img from './assets/tree3.png';
+import tree2Img from './assets/tree4.png';
 import fondImg from './assets/fond.jpg';
 import orImg from './assets/or.jpg';
 
@@ -64,7 +64,7 @@ export function createStage(container, cb) {
   scene.fog = new THREE.Fog(FOG, 10, 40);
   container.style.background = `#021A39 url(${fondImg}) center / cover no-repeat`;
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 120);
-  const LOOK = new THREE.Vector3(0, 1.45, 0);
+  const LOOK = new THREE.Vector3(0, 0.7, 0);
   let baseZ = 7;
   function resize() {
     const w = container.clientWidth || innerWidth, h = container.clientHeight || innerHeight;
@@ -97,11 +97,18 @@ export function createStage(container, cb) {
   glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.02, 1.2); scene.add(glow);
   /* Sapins : rendus 3D détourés (Magnific), plantés en volume dans la scène */
   const loadTex = (u) => { const x = new THREE.TextureLoader().load(u); x.colorSpace = THREE.SRGBColorSpace; x.anisotropy = 8; return x; };
-  const treeMats = [tree1Img, tree2Img].map((u) => new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xb4c8f2 }));
-  const TH = 4.2, treeGeo = new THREE.PlaneGeometry(TH * 0.75, TH); treeGeo.translate(0, TH / 2 - 0.09 * TH, 0);
+  const treeMats = [tree1Img, tree2Img].map((u) => new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xdbe6ff }));
+  const TH = 4.2, treeGeo = new THREE.PlaneGeometry(TH * 0.75, TH); treeGeo.translate(0, TH / 2 - 0.0725 * TH, 0);
+  const treeLights = []; const LCOL = [0xffd77a, 0xff6a5a, 0x8fbfff, 0xffe9a8];
   function tree(x, z, s) {
     const m = new THREE.Mesh(treeGeo, treeMats[Math.random() < 0.5 ? 0 : 1]);
-    m.position.set(x, 0, z); m.scale.set(s * (Math.random() < 0.5 ? -1 : 1), s, 1); scene.add(m);
+    m.position.set(x, 0, z); m.scale.set(s, s, 1); scene.add(m);
+    if (z > -13) for (let k = 0; k < 11; k++) { // petites lumières qui scintillent dans le feuillage
+      const f = Math.random(), hw = 0.36 * (TH * 0.75) * (1 - f) * 0.95;
+      const l = new THREE.Sprite(additive(new THREE.SpriteMaterial({ map: sTex, color: LCOL[k % 4], transparent: true, depthWrite: false, fog: false, opacity: 0.5 })));
+      l.position.set((Math.random() * 2 - 1) * hw, TH * (0.12 + 0.58 * f), 0.05); l.scale.setScalar(0.34 / s * (0.8 + Math.random() * 0.5));
+      l.userData.ph = Math.random() * 6.28; l.userData.sp = 1.4 + Math.random() * 2.2; m.add(l); treeLights.push(l);
+    }
   }
   for (let i = 0; i < 22; i++) {
     const z = 4 - i * 2.4, side = i % 2 ? 1 : -1;
@@ -120,7 +127,7 @@ export function createStage(container, cb) {
   const hip = (px, py, u) => { const g = new THREE.Group(); g.position.set((px / 600 - 0.5) * SW, (1 - py / 800) * SH, 0); const m = part(u, 5); m.position.set(-g.position.x, -g.position.y, 0); g.add(m); body.add(g); return g; };
   const legA = hip(245, 532, santaJambeA), legB = hip(370, 532, santaJambeB);
   const torse = part(santaTorse, 6); body.add(torse);
-  const SC = 0.8; santa.scale.setScalar(SC); scene.add(santa);
+  const SC = 1.05; santa.scale.setScalar(SC); scene.add(santa);
   const spot = (px, py) => { const o = new THREE.Object3D(); o.position.set((px / 600 - 0.5) * SW, (1 - py / 800) * SH, 0.05); rig.add(o); return o; };
   const mits = [spot(160, 170), spot(505, 470)]; // sac de cadeaux, main libre
 
@@ -227,6 +234,7 @@ export function createStage(container, cb) {
     } else { vTarget = 0.9 + Math.sin(time * 1.3) * 0.08; santa.visible = false; }
     vortex += (vTarget - vortex) * Math.min(1, dt * 6);
 
+    treeLights.forEach((l) => { l.material.opacity = 0.15 + 0.85 * Math.pow(0.5 + 0.5 * Math.sin(time * l.userData.sp + l.userData.ph), 2); });
     // traînées dorées
     const rb = phase === 'run' ? clamp(s / RUN) : phase === 'greet' ? 1 : phase === 'magic' ? 1 - smooth((s / MAGIC - 0.55) / 0.3) : 0;
     ribbons.forEach((r, i) => {
