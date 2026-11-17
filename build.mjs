@@ -10,12 +10,12 @@ const bundle = await build({ entryPoints: ['src/main.js'], bundle: true, minify:
 const js = bundle.outputFiles[0].text.replace(/<\/script>/g, '<\\/script>');
 
 let fonts = '';
-for (const w of [400, 600, 800]) {
-  const p = `node_modules/@fontsource/montserrat/files/montserrat-latin-${w}-normal.woff2`;
-  fonts += `@font-face{font-family:'Montserrat';font-weight:${w};font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64(p)}) format('woff2')}\n`;
+// Texte : Nunito (licence OFL) ; titres : Pacifico (licence OFL), libres y compris en entreprise
+for (const w of [500, 700, 800]) {
+  const p = `node_modules/@fontsource/nunito/files/nunito-latin-${w}-normal.woff2`;
+  fonts += `@font-face{font-family:'Nunito';font-weight:${w};font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64(p)}) format('woff2')}\n`;
 }
-// Police des titres : Norican (licence OFL, libre y compris en entreprise)
-fonts += `@font-face{font-family:'Norican';font-weight:400;font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64('node_modules/@fontsource/norican/files/norican-latin-400-normal.woff2')}) format('woff2')}\n`;
+fonts += `@font-face{font-family:'Pacifico';font-weight:400;font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64('node_modules/@fontsource/pacifico/files/pacifico-latin-400-normal.woff2')}) format('woff2')}\n`;
 
 const html = fs.readFileSync('template.html', 'utf8')
   .replace('/*FONTS*/', () => fonts)
