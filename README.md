@@ -9,9 +9,20 @@ Prototype : tout est contenu dans les liens, aucun serveur ni base de données.
 1. Ouvrir l'atelier (la page sans lien personnel).
 2. Coller la carte des duos, une ligne par duo : `Celui qui offre > Celui qui reçoit`.
 3. Facultatif : ajouter les règles du jeu (affichées au clic sur le bouton « i ») et la photo de chaque personne qui reçoit.
-4. Copier le lien de chaque collègue et le lui envoyer en privé.
+4. Choisir le type de lien (court chiffré par défaut), télécharger `cadeaux.json` et l'ajouter à la racine du dépôt (voir ci-dessous).
+5. Copier le lien de chaque collègue et le lui envoyer en privé.
 
 Chaque lien ne révèle que la personne à offrir.
+
+## Liens courts chiffrés
+
+Le lien ne contient qu'un identifiant et une clé (environ 30 caractères : `#k-…`). Les données de chaque personne (nom, photo, règles) sont chiffrées en AES-GCM avec la clé de son lien et rangées dans `cadeaux.json`, publié avec le site. Le fichier est illisible sans le lien. Les identifiants et clés sont générés une fois et gardés dans le navigateur de l'organisateur : les liens ne changent pas quand on modifie la carte.
+
+1. Dans l'atelier, laisser « Liens courts chiffrés », puis cliquer sur « Télécharger cadeaux.json ».
+2. Ajouter ce fichier à la racine du dépôt (à côté de `build.mjs`) et valider : `build.mjs` le copie dans le site.
+3. Attendre la fin de la publication, puis envoyer les liens.
+
+Refaire les étapes 1 à 3 si une photo, une règle ou un duo change. Les liens autonomes `#t-…` et `#s-…` fonctionnent toujours sans fichier.
 
 ## Lancer en local
 
