@@ -16,6 +16,7 @@ for (const w of [500, 700, 800]) {
   fonts += `@font-face{font-family:'Nunito';font-weight:${w};font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64(p)}) format('woff2')}\n`;
 }
 fonts += `@font-face{font-family:'Pacifico';font-weight:400;font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64('node_modules/@fontsource/pacifico/files/pacifico-latin-400-normal.woff2')}) format('woff2')}\n`;
+fonts += `@font-face{font-family:'Fredoka';font-weight:600;font-style:normal;font-display:swap;src:url(data:font/woff2;base64,${b64('node_modules/@fontsource/fredoka/files/fredoka-latin-600-normal.woff2')}) format('woff2')}\n`;
 
 const html = fs.readFileSync('template.html', 'utf8')
   .replace('/*FONTS*/', () => fonts)
