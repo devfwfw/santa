@@ -164,28 +164,57 @@ export function createStage(container, cb) {
   const snowGeo = new THREE.BufferGeometry(); snowGeo.setAttribute('position', new THREE.BufferAttribute(np, 3));
   scene.add(new THREE.Points(snowGeo, new THREE.PointsMaterial({ map: softTexture(), color: 0xF2E8D5, size: 0.14, transparent: true, depthWrite: false })));
 
-  const PN = 1200; const pPos = new Float32Array(PN * 3), pCol = new Float32Array(PN * 3), pBase = new Float32Array(PN * 3), pVel = new Float32Array(PN * 3), pLife = new Float32Array(PN), pMax = new Float32Array(PN);
+  /* Étincelles : chaque particule a une position, une vitesse et une durée de vie.
+     À chaque image : position += vitesse * dt ; durée restante -= dt ; opacité = durée restante / durée initiale ;
+     à 0 la particule disparaît (sa place est réutilisée). De nouvelles étincelles naissent en continu près du Père Noël. */
+  const PN = 2600;
+  const pPos = new Float32Array(PN * 3), pCol = new Float32Array(PN * 3), pVel = new Float32Array(PN * 3);
+  const pLife = new Float32Array(PN), pMax = new Float32Array(PN), pS0 = new Float32Array(PN), pPh = new Float32Array(PN);
+  const pAlpha = new Float32Array(PN), pSize = new Float32Array(PN), pRot = new Float32Array(PN);
   for (let i = 0; i < PN; i++) pPos[i * 3 + 1] = -99;
-  const pGeo = new THREE.BufferGeometry(); pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
-  const parts = new THREE.Points(pGeo, additive(new THREE.PointsMaterial({ map: sTex, size: 0.34, vertexColors: true, transparent: true, depthWrite: false })));
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); pGeo.setAttribute('aCol', new THREE.BufferAttribute(pCol, 3));
+  pGeo.setAttribute('aAlpha', new THREE.BufferAttribute(pAlpha, 1)); pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1)); pGeo.setAttribute('aRot', new THREE.BufferAttribute(pRot, 1));
+  const pMat = additive(new THREE.ShaderMaterial({
+    uniforms: { map: { value: sTex }, uScale: { value: 300 } }, transparent: true, depthWrite: false,
+    vertexShader: `attribute vec3 aCol; attribute float aAlpha; attribute float aSize; attribute float aRot;
+      uniform float uScale; varying vec3 vC; varying float vA; varying float vR;
+      void main(){ vC = aCol; vA = aAlpha; vR = aRot; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mv; gl_PointSize = aSize * uScale / max(0.1, -mv.z); }`,
+    fragmentShader: `uniform sampler2D map; varying vec3 vC; varying float vA; varying float vR;
+      void main(){ vec2 p = gl_PointCoord - 0.5; float c = cos(vR), s = sin(vR); p = mat2(c, -s, s, c) * p + 0.5;
+        vec4 t = texture2D(map, p); gl_FragColor = vec4(vC * t.rgb, t.a * vA);
+        #include <colorspace_fragment>
+      }`,
+  }));
+  const parts = new THREE.Points(pGeo, pMat);
   parts.frustumCulled = false; scene.add(parts);
   const PCOL = [[1, 0.8, 0.28], [1, 0.88, 0.45], [1, 0.72, 0.18], [1, 0.92, 0.6]]; let pIdx = 0;
+  function spawn(x, y, z, vx, vy, vz, life, size) {
+    const i = pIdx = (pIdx + 1) % PN;
+    pPos[i * 3] = x; pPos[i * 3 + 1] = y; pPos[i * 3 + 2] = z;
+    pVel[i * 3] = vx; pVel[i * 3 + 1] = vy; pVel[i * 3 + 2] = vz;
+    pMax[i] = pLife[i] = life; pS0[i] = size; pPh[i] = Math.random() * 6.283;
+    const c = PCOL[(Math.random() * PCOL.length) | 0]; pCol[i * 3] = c[0]; pCol[i * 3 + 1] = c[1]; pCol[i * 3 + 2] = c[2];
+  }
+  const pSizeRand = () => (Math.random() < 0.12 ? 0.42 + Math.random() * 0.3 : 0.12 + Math.random() * 0.26);
   function emit(n, o, speed, burst, spread = 0.25) {
     for (let k = 0; k < n; k++) {
-      const i = pIdx = (pIdx + 1) % PN;
-      pPos[i * 3] = o.x + (Math.random() - 0.5) * spread; pPos[i * 3 + 1] = o.y + (Math.random() - 0.5) * spread; pPos[i * 3 + 2] = o.z + (Math.random() - 0.5) * spread;
       const a = Math.random() * Math.PI * 2, s = speed * (0.4 + Math.random() * 0.8), b = Math.random() * Math.PI - Math.PI / 2;
-      if (burst) { pVel[i * 3] = Math.cos(a) * Math.cos(b) * s; pVel[i * 3 + 1] = Math.sin(b) * s; pVel[i * 3 + 2] = Math.sin(a) * Math.cos(b) * s; }
-      else { pVel[i * 3] = Math.cos(a) * s * 0.5; pVel[i * 3 + 1] = s * (0.2 + Math.random()); pVel[i * 3 + 2] = Math.sin(a) * s * 0.5 + 1.5; }
-      pMax[i] = pLife[i] = 0.7 + Math.random() * 1.1;
-      const c = PCOL[(Math.random() * PCOL.length) | 0]; pBase[i * 3] = c[0]; pBase[i * 3 + 1] = c[1]; pBase[i * 3 + 2] = c[2];
+      const x = o.x + (Math.random() - 0.5) * spread, y = o.y + (Math.random() - 0.5) * spread, z = o.z + (Math.random() - 0.5) * spread;
+      if (burst) spawn(x, y, z, Math.cos(a) * Math.cos(b) * s, Math.sin(b) * s, Math.sin(a) * Math.cos(b) * s, 0.8 + Math.random() * 1.2, pSizeRand());
+      else spawn(x, y, z, Math.cos(a) * s * 0.5, s * (0.2 + Math.random()), Math.sin(a) * s * 0.5 + 1.5, 0.7 + Math.random() * 1.1, pSizeRand());
     }
   }
-  // astres flottants autour du Père Noël
-  const orbit = []; for (let i = 0; i < 22; i++) {
-    const s = new THREE.Sprite(additive(new THREE.SpriteMaterial({ map: sTex, color: 0xffe2a0, transparent: true, depthWrite: false, opacity: 0 })));
-    s.userData = { a: Math.random() * 6.28, r: 1.0 + Math.random() * 1.0, h: 0.2 + Math.random() * 2.0, sp: 0.6 + Math.random() * 1.2, sz: 0.1 + Math.random() * 0.2, ph: Math.random() * 6 };
-    scene.add(s); orbit.push(s);
+  // naissance continue près du personnage : un nuage doré autour du corps qui s'élève en tournoyant
+  let auraAcc = 0;
+  function aura(dt, rate, cx, cy, cz, px, py, pz) {
+    auraAcc += dt * rate; const n = Math.floor(auraAcc); auraAcc -= n;
+    for (let k = 0; k < n; k++) {
+      const t = Math.random(), a = Math.random() * 6.283, r = 0.25 + Math.random() * 0.85;
+      const x = cx + (px - cx) * t + Math.cos(a) * r, y = cy + (py - cy) * t + (Math.random() - 0.35) * 1.7, z = cz + (pz - cz) * t + Math.sin(a) * r * 0.6;
+      spawn(x, y, z, -Math.sin(a) * 0.35 + (Math.random() - 0.5) * 0.3, 0.25 + Math.random() * 0.7, Math.cos(a) * 0.2 + (Math.random() - 0.5) * 0.3, 1.1 + Math.random() * 1.5, pSizeRand());
+    }
   }
   // tourbillon
   const VN = 2600; const vPos = new Float32Array(VN * 3), vCol = new Float32Array(VN * 3); const vd = [];
@@ -196,10 +225,10 @@ export function createStage(container, cb) {
   vort.frustumCulled = false; scene.add(vort);
 
   /* État */
-  let lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
+  let lastSX = null, lastSZ = null, lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
   const RUN = reduced ? 0.6 : 1.5, MAGIC = reduced ? 1.6 : 3.4;
   const tmp = new THREE.Vector3();
-  function restart() { lastZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; santa.visible = true; cb.onPhase('run'); }
+  function restart() { lastZ = null; lastSX = lastSZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; santa.visible = true; cb.onPhase('run'); }
   function magic() { if (phase !== 'greet') return; phase = 'magic'; t0 = time; flashed = revealed = false; cb.onPhase('magic'); }
   renderer.domElement.addEventListener('click', () => cb.onClick && cb.onClick());
 
@@ -228,7 +257,8 @@ export function createStage(container, cb) {
     for (let i = 0; i < NN; i++) { let y = sa.array[i * 3 + 1] - nv[i] * dt; if (y < 0) y = 10; sa.array[i * 3 + 1] = y; sa.array[i * 3] += Math.sin(time + i) * dt * 0.12; }
     sa.needsUpdate = true;
 
-    const s = time - t0; let orb = 0, vTarget = vortex;
+    const s = time - t0; let vTarget = vortex; const amp0 = reduced ? 0.35 : 1;
+    const auraX = lastSX === null ? santa.position.x : lastSX, auraZ = lastSZ === null ? santa.position.z : lastSZ;
     if (phase === 'run') {
       const u = clamp(s / RUN), e = 1 - Math.pow(1 - u, 2.2);
       santa.position.set(Math.sin(u * 9) * 1.1 * (1 - u), 0, -17 + e * 17.2);
@@ -236,16 +266,18 @@ export function createStage(container, cb) {
       rig.position.y = 0; santa.scale.setScalar(SC);
       mits.forEach((m) => { m.getWorldPosition(tmp); emit(4, tmp, 1.6, false, 0.15); });
       emit(5, tmp.set(santa.position.x, 0.2, santa.position.z), 1.4, false, 0.5);
+      aura(dt, 150 * amp0, auraX, santa.position.y + 1.0, auraZ, santa.position.x, santa.position.y + 1.0, santa.position.z);
       if (u >= 1) { phase = 'greet'; t0 = time; cb.onPhase('greet'); }
     } else if (phase === 'greet') {
-      santa.position.set(0, 0, 0.2); santa.rotation.y = 0; pose('jig', s, 0); orb = clamp(s / 0.6);
+      santa.position.set(0, 0, 0.2); santa.rotation.y = 0; pose('jig', s, 0);
       if (Math.random() < dt * 18) { mits[1].getWorldPosition(tmp); emit(2, tmp, 1.2, true, 0.1); }
+      aura(dt, 70 * amp0, santa.position.x, santa.position.y + 1.0, santa.position.z, santa.position.x, santa.position.y + 1.0, santa.position.z);
     } else if (phase === 'magic') {
       const m = clamp(s / MAGIC);
       pose('magic', s, m);
       const rise = Math.max(0, m - 0.2); santa.position.set(0, rise * rise * 5.5, 0.2);
       santa.scale.setScalar(SC * (1 - smooth((m - 0.5) / 0.4)));
-      vTarget = smooth(m / 0.5); orb = 1 - smooth((m - 0.3) / 0.3);
+      vTarget = smooth(m / 0.5);
       if (m > 0.2 && m < 0.85) emit(Math.round(240 * dt), tmp.set(santa.position.x, santa.position.y + 1.2, santa.position.z), 2.5, true, 0.6);
       if (!flashed && m >= 0.62) { flashed = true; emit(260, tmp.set(0, 2.2, 0.2), 5.5, true, 0.3); cb.onPhase('flash'); }
       if (!revealed && m >= 0.72) { revealed = true; santa.visible = false; cb.onPhase('reveal'); }
@@ -253,6 +285,7 @@ export function createStage(container, cb) {
       if (m >= 1) { phase = 'done'; t0 = time; cb.onPhase('done'); }
     } else { vTarget = 0.9 + Math.sin(time * 1.3) * 0.08; santa.visible = false; }
     vortex += (vTarget - vortex) * Math.min(1, dt * 6);
+    lastSX = santa.position.x; lastSZ = santa.position.z;
 
     // vent léger + sillage du Père Noël : un souffle pousse les sapins vers l'extérieur à son passage
     const sp = phase === 'run' && lastZ !== null ? clamp((santa.position.z - lastZ) / Math.max(dt, 1e-3) / 18) : 0; lastZ = santa.position.z;
@@ -278,14 +311,9 @@ export function createStage(container, cb) {
       r.material.opacity = rb * (i ? 1 : 1.4) * (0.85 + 0.15 * Math.sin(time * 4 + i));
     });
 
-    // lumière + astres
+    // lumière
     warm.position.set(santa.position.x, santa.position.y + 2.2, santa.position.z + 2);
     warm.intensity = phase === 'done' ? 0 : 14 + Math.sin(time * 5) * 2;
-    orbit.forEach((o) => {
-      const d = o.userData; const a = d.a + time * d.sp;
-      o.position.set(santa.position.x + Math.cos(a) * d.r, santa.position.y + d.h + Math.sin(time * 1.6 + d.ph) * 0.15, santa.position.z + Math.sin(a) * d.r * 0.8);
-      const tw = 0.6 + Math.sin(time * 4 + d.ph) * 0.4; o.material.opacity = orb * tw; o.scale.setScalar(d.sz * (0.8 + tw * 0.4));
-    });
     // anneau doré qui tourne autour de la photo (ou autour du Père Noël avant la révélation)
     {
       const W = container.clientWidth || innerWidth, Hh = container.clientHeight || innerHeight;
@@ -313,16 +341,26 @@ export function createStage(container, cb) {
       }
       vGeo.attributes.position.needsUpdate = true; vGeo.attributes.color.needsUpdate = true;
     } else vort.visible = false;
-    // particules
+    // particules : position += vitesse * dt ; durée restante -= dt ; opacité = durée restante / durée initiale
     for (let i = 0; i < PN; i++) {
       if (pLife[i] > 0) {
-        pLife[i] -= dt; const f = Math.max(0, pLife[i] / pMax[i]);
+        pLife[i] -= dt;
+        if (pLife[i] <= 0) { pAlpha[i] = 0; pSize[i] = 0; pPos[i * 3 + 1] = -99; continue; }
+        const f = pLife[i] / pMax[i];
         pPos[i * 3] += pVel[i * 3] * dt; pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt; pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
-        pVel[i * 3] *= 0.98; pVel[i * 3 + 1] = pVel[i * 3 + 1] * 0.98 - 0.8 * dt; pVel[i * 3 + 2] *= 0.98;
-        pCol[i * 3] = pBase[i * 3] * f; pCol[i * 3 + 1] = pBase[i * 3 + 1] * f; pCol[i * 3 + 2] = pBase[i * 3 + 2] * f;
-      } else pCol[i * 3] = pCol[i * 3 + 1] = pCol[i * 3 + 2] = 0;
+        const dr = Math.pow(0.5, dt * 2.2);
+        pVel[i * 3] = pVel[i * 3] * dr + Math.sin(time * 2.3 + pPh[i]) * dt * 0.5;
+        pVel[i * 3 + 1] = pVel[i * 3 + 1] * dr - 0.5 * dt;
+        pVel[i * 3 + 2] *= dr;
+        const tw = 0.7 + 0.3 * Math.sin(time * 11 + pPh[i] * 5);
+        pAlpha[i] = Math.min(1, f * 1.6) * tw;
+        pSize[i] = pS0[i] * (0.35 + 0.65 * f) * (0.85 + 0.15 * tw);
+        pRot[i] = pPh[i] + time * (0.6 + 0.5 * Math.sin(pPh[i]));
+      }
     }
-    pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
+    pMat.uniforms.uScale.value = renderer.getPixelRatio() * (container.clientHeight || innerHeight) * 0.5;
+    pGeo.attributes.position.needsUpdate = true; pGeo.attributes.aCol.needsUpdate = true;
+    pGeo.attributes.aAlpha.needsUpdate = true; pGeo.attributes.aSize.needsUpdate = true; pGeo.attributes.aRot.needsUpdate = true;
   }
 
   let last = performance.now();
