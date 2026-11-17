@@ -98,6 +98,15 @@ export function createStage(container, cb) {
   const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: grad });
   const glow = new THREE.Mesh(new THREE.CircleGeometry(4.5, 48), new THREE.MeshBasicMaterial({ map: softTexture(195, 224, 235), transparent: true, opacity: 0.35, depthWrite: false }));
   glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.02, 1.2); scene.add(glow);
+  /* Sol : vrai relief enneigé en 3D (doux, plat autour du Père Noël), pour que chaque sapin y soit planté */
+  const hill = (x, z) => {
+    const w = Math.min(1, Math.max(0, (Math.hypot(x * 0.7, z - 1) - 2) / 4)), k = w * w * (3 - 2 * w);
+    return k * (0.34 * Math.sin(x * 0.33 + z * 0.17) + 0.24 * Math.sin(x * 0.15 - z * 0.29) + 0.1 * Math.sin(x * 0.7 + z * 0.5));
+  };
+  const gGeo = new THREE.PlaneGeometry(140, 76, 140, 76); gGeo.rotateX(-Math.PI / 2); gGeo.translate(0, 0, -24);
+  { const gp = gGeo.attributes.position; for (let i = 0; i < gp.count; i++) gp.setY(i, hill(gp.getX(i), gp.getZ(i))); gGeo.computeVertexNormals(); }
+  scene.add(new THREE.Mesh(gGeo, new THREE.MeshToonMaterial({ color: 0x5d82a8, gradientMap: grad })));
+  const shadowTex = softTexture(2, 10, 28), shadowGeo = new THREE.PlaneGeometry(2.6, 1.3);
   /* Sapins : rendus 3D détourés (Magnific), plantés en volume dans la scène */
   const loadTex = (u) => { const x = new THREE.TextureLoader().load(u); x.colorSpace = THREE.SRGBColorSpace; x.anisotropy = 8; return x; };
   const treeMats = [tree1Img, tree2Img, tree3Img, tree4Img, tree5Img].map((u) => new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xdbe6ff }));
@@ -120,7 +129,9 @@ export function createStage(container, cb) {
   }
   function tree(x, z, s) {
     const m = new THREE.Mesh(treeGeo, swayMaterial(treeMats[Math.floor(Math.random() * treeMats.length)]));
-    m.position.set(x, 0, z); m.scale.set(s, s, 1); scene.add(m);
+    const gy = hill(x, z); m.position.set(x, gy - 0.04, z); m.scale.set(s, s, 1); scene.add(m);
+    const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.5, depthWrite: false }));
+    sh.rotation.x = -Math.PI / 2; sh.position.set(x, gy + 0.03, z + 0.05); sh.scale.set(s * 1.1, s, 1); scene.add(sh);
     const tr = { m, a: 0, v: 0, lights: [] }; trees.push(tr);
     if (z > -13) for (let k = 0; k < 11; k++) { // petites lumières qui scintillent dans le feuillage
       const f = Math.random(), hw = 0.36 * (TH * 0.75) * (1 - f) * 0.95;
