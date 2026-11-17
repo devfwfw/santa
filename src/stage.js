@@ -4,6 +4,9 @@ import santaJambeA from './assets/santa_jambeA.png';
 import santaJambeB from './assets/santa_jambeB.png';
 import tree1Img from './assets/tree3.png';
 import tree2Img from './assets/tree4.png';
+import tree3Img from './assets/tree5.png';
+import tree4Img from './assets/tree6.png';
+import tree5Img from './assets/tree7.png';
 import fondImg from './assets/fond.jpg';
 import orImg from './assets/or.jpg';
 
@@ -97,17 +100,34 @@ export function createStage(container, cb) {
   glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.02, 1.2); scene.add(glow);
   /* Sapins : rendus 3D détourés (Magnific), plantés en volume dans la scène */
   const loadTex = (u) => { const x = new THREE.TextureLoader().load(u); x.colorSpace = THREE.SRGBColorSpace; x.anisotropy = 8; return x; };
-  const treeMats = [tree1Img, tree2Img].map((u) => new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xdbe6ff }));
+  const treeMats = [tree1Img, tree2Img, tree3Img, tree4Img, tree5Img].map((u) => new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xdbe6ff }));
   const TH = 4.2, treeGeo = new THREE.PlaneGeometry(TH * 0.75, TH); treeGeo.translate(0, TH / 2 - 0.0725 * TH, 0);
   const treeLights = []; const LCOL = [0xffd77a, 0xff6a5a, 0x8fbfff, 0xffe9a8];
+  /* Vent et sillage : chaque sapin plie dans le vertex shader (plus on monte, plus il plie) et oscille sur un ressort amorti */
+  const trees = [], BEND = 0.5;
+  function swayMaterial(base) {
+    const mat = base.clone(), u = { value: 0 };
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.uBend = u;
+      sh.vertexShader = 'uniform float uBend;\n' + sh.vertexShader.replace('#include <begin_vertex>',
+        `#include <begin_vertex>
+        float bh = max(0.0, (position.y + ${(0.0725 * TH).toFixed(4)}) / ${TH.toFixed(4)});
+        transformed.x += uBend * bh * bh;
+        transformed.y -= abs(uBend) * 0.12 * bh * bh;`);
+    };
+    mat.customProgramCacheKey = () => 'sway-tree';
+    mat.userData.u = u; return mat;
+  }
   function tree(x, z, s) {
-    const m = new THREE.Mesh(treeGeo, treeMats[Math.random() < 0.5 ? 0 : 1]);
+    const m = new THREE.Mesh(treeGeo, swayMaterial(treeMats[Math.floor(Math.random() * treeMats.length)]));
     m.position.set(x, 0, z); m.scale.set(s, s, 1); scene.add(m);
+    const tr = { m, a: 0, v: 0, lights: [] }; trees.push(tr);
     if (z > -13) for (let k = 0; k < 11; k++) { // petites lumières qui scintillent dans le feuillage
       const f = Math.random(), hw = 0.36 * (TH * 0.75) * (1 - f) * 0.95;
       const l = new THREE.Sprite(additive(new THREE.SpriteMaterial({ map: sTex, color: LCOL[k % 4], transparent: true, depthWrite: false, fog: false, opacity: 0.5 })));
       l.position.set((Math.random() * 2 - 1) * hw, TH * (0.12 + 0.58 * f), 0.05); l.scale.setScalar(0.34 / s * (0.8 + Math.random() * 0.5));
       l.userData.ph = Math.random() * 6.28; l.userData.sp = 1.4 + Math.random() * 2.2; m.add(l); treeLights.push(l);
+      tr.lights.push({ l, bx: l.position.x, h: (l.position.y + 0.0725 * TH) / TH });
     }
   }
   for (let i = 0; i < 22; i++) {
@@ -176,10 +196,10 @@ export function createStage(container, cb) {
   vort.frustumCulled = false; scene.add(vort);
 
   /* État */
-  let phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
+  let lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
   const RUN = reduced ? 0.6 : 1.5, MAGIC = reduced ? 1.6 : 3.4;
   const tmp = new THREE.Vector3();
-  function restart() { phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; santa.visible = true; cb.onPhase('run'); }
+  function restart() { lastZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; santa.visible = true; cb.onPhase('run'); }
   function magic() { if (phase !== 'greet') return; phase = 'magic'; t0 = time; flashed = revealed = false; cb.onPhase('magic'); }
   renderer.domElement.addEventListener('click', () => cb.onClick && cb.onClick());
 
@@ -234,6 +254,19 @@ export function createStage(container, cb) {
     } else { vTarget = 0.9 + Math.sin(time * 1.3) * 0.08; santa.visible = false; }
     vortex += (vTarget - vortex) * Math.min(1, dt * 6);
 
+    // vent léger + sillage du Père Noël : un souffle pousse les sapins vers l'extérieur à son passage
+    const sp = phase === 'run' && lastZ !== null ? clamp((santa.position.z - lastZ) / Math.max(dt, 1e-3) / 18) : 0; lastZ = santa.position.z;
+    const amp = reduced ? 0.3 : 1, step = Math.min(dt, 0.033);
+    for (const tr of trees) {
+      const px = tr.m.position.x, pz = tr.m.position.z, dz = santa.position.z - pz;
+      const gust = sp * Math.exp(-((dz + 0.8) * (dz + 0.8)) / 5.2) * Math.exp(-Math.abs(px - santa.position.x) / 9);
+      const dir = (px - santa.position.x) >= 0 ? 1 : -1;
+      const wind = 0.06 * Math.sin(time * 1.1 + px * 0.4 + pz * 0.25) + 0.04 * Math.sin(time * 2.3 + pz * 0.7 + px * 0.2);
+      const acc = -36 * tr.a - 2.4 * tr.v + 36 * wind * amp + 30 * gust * dir * amp;
+      tr.v += acc * step; tr.a += tr.v * step; tr.a = Math.max(-1.2, Math.min(1.2, tr.a));
+      const bend = tr.a * BEND; tr.m.material.userData.u.value = bend;
+      for (const L of tr.lights) L.l.position.x = L.bx + bend * L.h * L.h;
+    }
     treeLights.forEach((l) => { l.material.opacity = 0.15 + 0.85 * Math.pow(0.5 + 0.5 * Math.sin(time * l.userData.sp + l.userData.ph), 2); });
     // traînées dorées
     const rb = phase === 'run' ? clamp(s / RUN) : phase === 'greet' ? 1 : phase === 'magic' ? 1 - smooth((s / MAGIC - 0.55) / 0.3) : 0;
