@@ -1,5 +1,6 @@
 import { createStage } from './stage.js';
 import colasLogo from './assets/colas.png';
+import { seal, open as unseal, randomToken, ID_LEN, KEY_LEN } from './vault.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -76,24 +77,26 @@ const QUAL = { leger: { label: 'Léger', size: 176, q: 0.6 }, standard: { label:
 const photos = new Map();   // nom normalisé → photo d'origine réduite (360 px), sert à fabriquer les miniatures
 const thumbs = new Map();   // nom|qualité → miniature carrée envoyée dans le lien
 const DEFAULT_RULES = 'Budget maximum : 10 €\nMets le nom de ton ami secret dans le cadeau';
-const adminState = { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard' };
+const adminState = { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard', mode: 'court' };
+const secrets = new Map();  // duo (donneur|receveur) → { id, k } : générés une fois, gardés pour que les liens ne changent jamais
 let fromAdminFlag = false;
 
 /* Sauvegarde locale (navigateur de l'organisateur uniquement, rien n'est envoyé à un serveur) */
 const STORE = 'santa-magica-atelier-v1';
 function saveAtelier() {
-  const d = { t: adminState.text, r: adminState.rules, b: adminState.base === DEFAULT_BASE ? '' : adminState.base, q: adminState.quality };
+  const d = { t: adminState.text, r: adminState.rules, b: adminState.base === DEFAULT_BASE ? '' : adminState.base, q: adminState.quality, m: adminState.mode, s: Object.fromEntries(secrets) };
   try { localStorage.setItem(STORE, JSON.stringify({ ...d, p: Object.fromEntries(photos) })); }
   catch (e) { try { localStorage.setItem(STORE, JSON.stringify(d)); toast('Photos trop lourdes pour la sauvegarde : le texte est enregistré, pas les photos.'); } catch (_) {} }
 }
 function loadAtelier() {
   try {
     const d = JSON.parse(localStorage.getItem(STORE) || 'null'); if (!d) return;
-    adminState.text = d.t || ''; adminState.rules = typeof d.r === 'string' ? d.r : DEFAULT_RULES; if (d.b) adminState.base = d.b; if (QUAL[d.q]) adminState.quality = d.q;
+    adminState.text = d.t || ''; adminState.rules = typeof d.r === 'string' ? d.r : DEFAULT_RULES; if (d.b) adminState.base = d.b; if (QUAL[d.q]) adminState.quality = d.q; if (d.m === 'long') adminState.mode = 'long';
+    Object.entries(d.s || {}).forEach(([k, v]) => secrets.set(k, v));
     Object.entries(d.p || {}).forEach(([k, v]) => photos.set(k, v));
   } catch (e) {}
 }
-function clearAtelier() { try { localStorage.removeItem(STORE); } catch (e) {} photos.clear(); thumbs.clear(); Object.assign(adminState, { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard' }); }
+function clearAtelier() { try { localStorage.removeItem(STORE); } catch (e) {} photos.clear(); thumbs.clear(); secrets.clear(); Object.assign(adminState, { text: '', rules: DEFAULT_RULES, base: DEFAULT_BASE, quality: 'standard', mode: 'court' }); }
 loadAtelier();
 
 /* « NOM, Prénom » devient « Prénom NOM » pour l'affichage */
@@ -135,11 +138,25 @@ async function ensureThumbs() {
   for (const [k, master] of photos) { const key = k + '|' + adminState.quality; if (!thumbs.has(key)) { try { thumbs.set(key, await makeThumb(master, Q.size, Q.q)); } catch (e) {} } }
 }
 
-function linkFor(p) {
-  const meta = { v: 2, g: p.g, r: p.r }; const rules = adminState.rules.trim(); if (rules) meta.m = rules;
-  const ph = thumbs.get(norm(p.r) + '|' + adminState.quality);
-  const base = (adminState.base || DEFAULT_BASE).split('#')[0];
-  return base + '#t-' + toB62(pack(meta, ph ? dataUrlToBytes(ph) : null));
+const metaFor = (p) => { const meta = { v: 2, g: p.g, r: p.r }; const rules = adminState.rules.trim(); if (rules) meta.m = rules; return meta; };
+const bytesFor = (p) => { const ph = thumbs.get(norm(p.r) + '|' + adminState.quality); return pack(metaFor(p), ph ? dataUrlToBytes(ph) : null); };
+const baseUrl = () => (adminState.base || DEFAULT_BASE).split('#')[0];
+const longLink = (p) => baseUrl() + '#t-' + toB62(bytesFor(p));
+function secretFor(p) {
+  const key = norm(p.g) + '|' + norm(p.r);
+  if (!secrets.has(key)) secrets.set(key, { id: randomToken(ID_LEN), k: randomToken(KEY_LEN) });
+  return secrets.get(key);
+}
+const shortLink = (p) => { const s = secretFor(p); return baseUrl() + '#k-' + s.id + s.k; };
+const linkFor = (p) => (adminState.mode === 'court' ? shortLink(p) : longLink(p));
+async function buildVault(pairs) {
+  const vault = {};
+  for (const p of pairs) { const s = secretFor(p); vault[s.id] = await seal(bytesFor(p), s.k); }
+  return JSON.stringify(vault);
+}
+function downloadText(name, text) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
 function renderAdmin() {
@@ -235,15 +252,23 @@ function renderPeople(parsed) {
 }
 
 function renderLinks(parsed) {
-  const el = $('#links');
+  const el = $('#links'), court = adminState.mode === 'court';
   if (parsed.errors.length || !parsed.pairs.length) { el.innerHTML = `<p class="empty">${parsed.errors.length ? 'Corrigez la carte pour faire apparaître les liens.' : 'Les liens apparaîtront ici.'}</p>`; return; }
   const rows = parsed.pairs.map((p) => ({ p, url: linkFor(p) }));
   lastLens = rows.map((r) => ({ n: r.url.length, ph: thumbs.has(norm(r.p.r) + '|' + adminState.quality) }));
-  el.innerHTML = `<div class="row"><button class="btn small" id="all">Copier tous les liens</button></div>
-  <ul class="links">${rows.map((r, i) => `<li><div><b>${esc(r.p.g)}</b><small>${r.url.length <= 3000 ? 'lien court' : r.url.length <= 6500 ? 'lien moyen (photo) · mail ou Teams' : 'lien long (photo) · mail ou Teams, pas SMS'} · ${r.url.length.toLocaleString('fr-FR')} caractères</small></div>
+  const lenTxt = (n) => (court ? 'lien court chiffré' : n <= 3000 ? 'lien autonome court' : n <= 6500 ? 'lien autonome moyen (photo)' : 'lien autonome long (photo)') + ' · ' + n.toLocaleString('fr-FR') + ' caractères';
+  el.innerHTML = `<div class="seg" id="mode" role="group" aria-label="Type de lien">
+      <button type="button" class="btn ghost small${court ? ' on' : ''}" data-m="court">Liens courts chiffrés</button>
+      <button type="button" class="btn ghost small${court ? '' : ' on'}" data-m="long">Liens autonomes (longs)</button></div>
+    ${court ? `<div class="notice"><b>Avant d'envoyer les liens :</b> téléchargez <code>cadeaux.json</code> ci-dessous, ajoutez-le à la racine du dépôt GitHub (à côté de <code>build.mjs</code>), puis attendez la fin de la publication (onglet Actions). Les liens courts ne fonctionnent qu'après cette étape. Refaites-la si vous changez une photo, une règle ou un duo.</div>
+      <div class="row"><button class="btn small" id="dl">Télécharger cadeaux.json</button></div>` : '<p class="hint">Ces liens contiennent toutes leurs données : aucun fichier à publier, mais ils sont longs (mail ou Teams, pas SMS).</p>'}
+    <div class="row"><button class="btn small" id="all">Copier tous les liens</button></div>
+  <ul class="links">${rows.map((r, i) => `<li><div><b>${esc(r.p.g)}</b><small>${lenTxt(r.url.length)}</small></div>
     <div class="acts"><button class="btn small" data-c="${i}">Copier le lien</button><button class="btn ghost small" data-v="${i}">Aperçu</button></div></li>`).join('')}</ul>`;
+  el.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { adminState.mode = b.dataset.m; renderLinks(parsed); saveAtelier(); }));
+  const dl = $('#dl'); if (dl) dl.addEventListener('click', async () => { downloadText('cadeaux.json', await buildVault(parsed.pairs)); toast('cadeaux.json téléchargé : à ajouter au dépôt GitHub.'); });
   el.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', async () => { const r = rows[+b.dataset.c]; await copyText(r.url); toast(`Lien copié — à envoyer en privé à ${first(r.p.g)}`); }));
-  el.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => { fromAdminFlag = true; location.hash = rows[+b.dataset.v].url.split('#')[1]; }));
+  el.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => { fromAdminFlag = true; location.hash = longLink(rows[+b.dataset.v].p).split('#')[1]; }));
   $('#all').addEventListener('click', async () => { await copyText(rows.map((r) => `${r.p.g} : ${r.url}`).join('\n')); toast('Tous les liens sont copiés (un par ligne).'); });
 }
 
@@ -311,14 +336,26 @@ function renderReveal(data) {
 }
 
 /* ---------- Routage ---------- */
-function route() {
+const errorPage = (msg) => { document.body.className = ''; app.innerHTML = `${brand()}<main class="admin"><section class="paper"><h2>Ce lien est incomplet</h2><p>${msg}</p><a class="btn" href="#">Aller à l'atelier</a></section></main>`; };
+let routeSeq = 0;
+async function route() {
+  const my = ++routeSeq;
   if (stage) { stage.dispose(); stage = null; }
-  const m = location.hash.match(/^#([st])-([0-9A-Za-z]+)$/);
+  const m = location.hash.match(/^#([stk])-([0-9A-Za-z]+)$/);
   if (m) {
-    let data = null; try { data = unpack(m[1] === 't' ? fromB62(m[2]) : fromB36(m[2])); } catch (e) {}
+    let data = null;
+    try {
+      if (m[1] === 'k') {
+        document.body.className = 'is-reveal'; app.innerHTML = `${brand()}<main class="admin"><p class="empty">Le Père Noël prépare ta surprise…</p></main>`;
+        const id = m[2].slice(0, ID_LEN), secret = m[2].slice(ID_LEN);
+        const res = await fetch(new URL('cadeaux.json', location.href.split('#')[0]), { cache: 'no-cache' });
+        const vault = await res.json();
+        data = unpack(await unseal(vault[id], secret));
+      } else data = unpack(m[1] === 't' ? fromB62(m[2]) : fromB36(m[2]));
+    } catch (e) {}
+    if (my !== routeSeq) return;
     if (data && data.g && data.r) { document.body.className = 'is-reveal'; renderReveal(data); return; }
-    document.body.className = '';
-    app.innerHTML = `${brand()}<main class="admin"><section class="paper"><h2>Ce lien est incomplet</h2><p>Le lien n'a pas pu être lu. Demandez à l'organisateur de vous le renvoyer en entier.</p><a class="btn" href="#">Aller à l'atelier</a></section></main>`;
+    errorPage("Le lien n'a pas pu être lu. Vérifiez qu'il est complet et réessayez, ou demandez à l'organisateur de vous le renvoyer.");
     return;
   }
   document.body.className = ''; document.title = `${APP} — Atelier`;
