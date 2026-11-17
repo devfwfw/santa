@@ -108,7 +108,8 @@ textarea#map{font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.7}
 .after{animation:rise .8s ease both}
 @keyframes rise{from{opacity:0;transform:translateY(14px)}}
 .note{font-size:.88rem;margin:0 0 12px;color:rgba(234,246,255,.85)}
-.result.veil .frame,.result.veil .name{filter:blur(18px)}
+.result.veil .frame,.result.veil .name{animation:none;filter:blur(18px);opacity:1;transform:none;transition:filter .5s}
+.result.in:not(.veil) .frame,.result.in:not(.veil) .name{transition:filter .5s}
 .frame,.name{transition:filter .3s}
 
 
