@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mystère de Noël — Team RH Colas</title>
+<title>Mystère de Noël Team RH Colas</title>
 <style>
 /*FONTS*/
 :root{--creme:#F2E8D5;--sapin:#1F4D3A;--houx:#B3202A;--or:#C9A54C;--gui:#2E6B4F;
@@ -139,11 +139,39 @@ textarea#map{font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.7}
 .friend{margin:0 0 1.4rem;font-size:.9rem;color:rgba(242,232,213,.8)}.friend b{color:var(--or);font-weight:800}
 .muted{opacity:.5;font-size:.85rem}
 
+/* Habillage « Nuit et or » : cartes pleines, sans verre ni brillance, même famille que le décor */
+.brand{top:16px;left:18px;right:auto;padding:9px 24px 9px 16px;gap:14px;border-radius:999px;background:linear-gradient(170deg,#0B2447 0%,#06183A 100%);box-shadow:0 0 0 1.5px var(--or),0 10px 22px rgba(0,5,20,.5)}
+.brand::before{content:none}
+.brand .logo{height:44px}.brand .sep{height:30px}
+.brand .back{margin-left:6px;background:transparent;border:1px solid rgba(201,165,76,.6)}
+.canvas-wrap::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 58%,transparent 42%,rgba(1,14,37,.6) 100%)}
+.greet,.modal-card{position:relative;border:0;border-radius:28px;font-weight:500;background:linear-gradient(170deg,#0B2447 0%,#06183A 100%);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:0 0 0 1.5px var(--or),0 26px 50px rgba(0,8,20,.55),0 0 60px rgba(4,62,138,.35)}
+.greet::before,.modal-card::before{content:"";position:absolute;left:0;right:0;top:0;height:26px;border-radius:28px 28px 0 0;pointer-events:none;background:linear-gradient(#E8F1FA,#E8F1FA) 0 0/100% 6px no-repeat,radial-gradient(circle at 50% 0,#E8F1FA 0 11px,transparent 12px) 0 0/30px 22px repeat-x,radial-gradient(circle at 50% 0,#E8F1FA 0 7px,transparent 8px) 15px 0/41px 26px repeat-x}
+.greet>*,.modal-card>*{position:relative}
+.greet{padding:44px 36px 32px}.modal-card{padding:48px 32px 32px}
+.greet h1{font-size:clamp(1.9rem,4.4vw,2.6rem)}.modal h2{font-size:2.9rem}
+.greet .lead{font-size:.97rem}
+.greet .eyebrow,.modal-card .eyebrow{color:#E3C26F}
+.reveal .btn:not(.ghost),.modal .btn:not(.ghost){border:0;color:var(--bleu-profond);background:var(--or);box-shadow:0 3px 0 #8A6A22,0 12px 20px rgba(0,0,0,.4);transition:transform .15s,box-shadow .15s,background .2s}
+.reveal .btn:not(.ghost):hover,.modal .btn:not(.ghost):hover{background:#E3C26F;border:0;color:var(--bleu-profond);transform:translateY(-2px)}
+.reveal .btn:not(.ghost):active,.modal .btn:not(.ghost):active{transform:translateY(3px);box-shadow:0 0 0 #8A6A22,0 4px 8px rgba(0,0,0,.4)}
+.reveal .btn.ghost,.modal .btn.ghost{background:transparent;border:1.5px solid var(--or);color:var(--creme)}
+.info{border:0;background:linear-gradient(170deg,#0B2447 0%,#06183A 100%);box-shadow:0 0 0 1.5px var(--or),0 10px 22px rgba(0,5,20,.5);-webkit-backdrop-filter:none;backdrop-filter:none}
+.info i{background:var(--or);color:var(--bleu-profond)}
+.info:hover{background:var(--or);color:var(--bleu-profond)}.info:hover i{background:var(--bleu-profond);color:var(--or)}
+.rules-list li{border:0;border-radius:18px;background:rgba(242,232,213,.07);box-shadow:0 0 0 1px rgba(201,165,76,.4);font-weight:500}
+.rules-list li::before{color:#E3C26F}
+.friend{color:var(--creme);font-weight:500}.friend b{color:#E3C26F}
+.modal .close{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;top:30px;right:16px;font-size:1.4rem;opacity:1;background:transparent;box-shadow:0 0 0 1.5px rgba(201,165,76,.5)}
+.frame{padding:12px;border-radius:28px;background:var(--creme);box-shadow:0 0 0 2px var(--or),0 20px 44px rgba(0,5,20,.5),0 0 60px rgba(195,224,235,.35)}
+.frame img,.mono{border-radius:18px}
+.note{color:var(--creme);font-weight:500;text-shadow:0 1px 10px var(--nuit),0 0 3px var(--nuit)}
+
 @media (max-width:760px){
  .brand{padding:12px 14px;gap:10px}.brand:has(.back) .sep,.brand:has(.back) .ttl{display:none}.brand .back{margin-left:4px}.brand .logo{height:38px}.brand .sep{height:26px}.brand b{font-size:1.25rem}.brand small{display:none}
  .info{top:12px;right:12px;height:38px;padding:0 13px 0 6px;font-size:.62rem;gap:7px}.info i{width:24px;height:24px}
  .ui{padding:80px 14px 22px}
- .greet{padding:16px 16px 18px}.greet .lead{font-size:.86rem;margin-bottom:.9rem}.greet .btn.big{padding:.95rem 1.4rem;font-size:.74rem}
+ .greet{padding:38px 18px 22px}.greet .lead{font-size:.86rem;margin-bottom:.9rem}.greet .btn.big{padding:.95rem 1.4rem;font-size:.74rem}
  .mono{font-size:4.5rem}
 }
 @media (prefers-reduced-motion:reduce){.spark::before,.spark::after{animation:none;opacity:.8}.snow{animation:none}.greet.in,.result.in .frame,.result.in .name{animation-duration:.01s}}
