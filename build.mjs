@@ -23,4 +23,5 @@ const html = fs.readFileSync('template.html', 'utf8')
   .replace('/*BASE*/', () => (base ? `window.__BASE_URL__=${JSON.stringify(base)};` : ''));
 fs.mkdirSync('dist', { recursive: true });
 fs.writeFileSync('dist/index.html', html);
+if (fs.existsSync('cadeaux.json')) { fs.copyFileSync('cadeaux.json', 'dist/cadeaux.json'); console.log('dist/cadeaux.json copié'); }
 console.log(`dist/index.html (${Math.round(html.length / 1024)} Ko)`);
