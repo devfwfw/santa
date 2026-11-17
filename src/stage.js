@@ -167,9 +167,9 @@ export function createStage(container, cb) {
   /* Étincelles : chaque particule a une position, une vitesse et une durée de vie.
      À chaque image : position += vitesse * dt ; durée restante -= dt ; opacité = durée restante / durée initiale ;
      à 0 la particule disparaît (sa place est réutilisée). De nouvelles étincelles naissent en continu près du Père Noël. */
-  const PN = 2600;
+  const PN = 7000;
   const pPos = new Float32Array(PN * 3), pCol = new Float32Array(PN * 3), pVel = new Float32Array(PN * 3);
-  const pLife = new Float32Array(PN), pMax = new Float32Array(PN), pS0 = new Float32Array(PN), pPh = new Float32Array(PN);
+  const pK = new Float32Array(PN), pR = new Float32Array(PN), pLife = new Float32Array(PN), pMax = new Float32Array(PN), pS0 = new Float32Array(PN), pPh = new Float32Array(PN);
   const pAlpha = new Float32Array(PN), pSize = new Float32Array(PN), pRot = new Float32Array(PN);
   for (let i = 0; i < PN; i++) pPos[i * 3 + 1] = -99;
   const pGeo = new THREE.BufferGeometry();
@@ -183,19 +183,19 @@ export function createStage(container, cb) {
         gl_Position = projectionMatrix * mv; gl_PointSize = aSize * uScale / max(0.1, -mv.z); }`,
     fragmentShader: `uniform sampler2D map; varying vec3 vC; varying float vA; varying float vR;
       void main(){ vec2 p = gl_PointCoord - 0.5; float c = cos(vR), s = sin(vR); p = mat2(c, -s, s, c) * p + 0.5;
-        vec4 t = texture2D(map, p); gl_FragColor = vec4(vC * t.rgb, t.a * vA);
+        vec4 t = texture2D(map, p); gl_FragColor = vec4(vC * (0.5 + 0.5 * t.r), t.a * vA);
         #include <colorspace_fragment>
       }`,
   }));
   const parts = new THREE.Points(pGeo, pMat);
   parts.frustumCulled = false; scene.add(parts);
-  const PCOL = [[1, 0.8, 0.28], [1, 0.88, 0.45], [1, 0.72, 0.18], [1, 0.92, 0.6]]; let pIdx = 0;
-  function spawn(x, y, z, vx, vy, vz, life, size) {
+  const PCOL = [[1, 0.78, 0.26], [1, 0.84, 0.38], [1, 0.7, 0.16], [1, 0.88, 0.5]]; let pIdx = 0;
+  function spawn(x, y, z, vx, vy, vz, life, size, bright = 1, kind = 0, R = 0) {
     const i = pIdx = (pIdx + 1) % PN;
     pPos[i * 3] = x; pPos[i * 3 + 1] = y; pPos[i * 3 + 2] = z;
     pVel[i * 3] = vx; pVel[i * 3 + 1] = vy; pVel[i * 3 + 2] = vz;
-    pMax[i] = pLife[i] = life; pS0[i] = size; pPh[i] = Math.random() * 6.283;
-    const c = PCOL[(Math.random() * PCOL.length) | 0]; pCol[i * 3] = c[0]; pCol[i * 3 + 1] = c[1]; pCol[i * 3 + 2] = c[2];
+    pMax[i] = pLife[i] = life; pS0[i] = size; pK[i] = kind; pR[i] = R; pPh[i] = Math.random() * 6.283;
+    const c = kind === 1 ? (Math.random() < 0.5 ? [1, 0.66, 0.12] : [1, 0.76, 0.22]) : PCOL[(Math.random() * PCOL.length) | 0]; pCol[i * 3] = c[0] * bright; pCol[i * 3 + 1] = c[1] * bright; pCol[i * 3 + 2] = c[2] * bright;
   }
   const pSizeRand = () => (Math.random() < 0.12 ? 0.42 + Math.random() * 0.3 : 0.12 + Math.random() * 0.26);
   function emit(n, o, speed, burst, spread = 0.25) {
@@ -216,13 +216,8 @@ export function createStage(container, cb) {
       spawn(x, y, z, -Math.sin(a) * 0.35 + (Math.random() - 0.5) * 0.3, 0.25 + Math.random() * 0.7, Math.cos(a) * 0.2 + (Math.random() - 0.5) * 0.3, 1.1 + Math.random() * 1.5, pSizeRand());
     }
   }
-  // tourbillon
-  const VN = 2600; const vPos = new Float32Array(VN * 3), vCol = new Float32Array(VN * 3); const vd = [];
-  for (let i = 0; i < VN; i++) vd.push({ arc: ((i % 4) / 4) * 6.283 + (Math.random() - 0.5) * 0.12, u: Math.pow(Math.random(), 1.3), off: Math.random(), sp: 1 + Math.random() * 0.06, c: PCOL[(Math.random() * 4) | 0] });
-  let rcx = 0, rcy = 1.3, rcz = 0.2, rhs = 1.2; const rv = new THREE.Vector3();
-  const vGeo = new THREE.BufferGeometry(); vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3)); vGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
-  const vort = new THREE.Points(vGeo, additive(new THREE.PointsMaterial({ map: sTex, size: 0.14, vertexColors: true, transparent: true, depthWrite: false })));
-  vort.frustumCulled = false; scene.add(vort);
+  // anneau de magie : centre et rayon suivis en douceur ; les étincelles qui y naissent suivent sa tangente
+  let rcx = 0, rcy = 1.3, rcz = 0.2, rhs = 1.2, vAcc = 0; const rv = new THREE.Vector3();
 
   /* État */
   let lastSX = null, lastSZ = null, lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
@@ -302,9 +297,9 @@ export function createStage(container, cb) {
     }
     treeLights.forEach((l) => { l.material.opacity = 0.15 + 0.85 * Math.pow(0.5 + 0.5 * Math.sin(time * l.userData.sp + l.userData.ph), 2); });
     // traînées dorées
-    const rb = phase === 'run' ? clamp(s / RUN) : phase === 'greet' ? 1 : phase === 'magic' ? 1 - smooth((s / MAGIC - 0.55) / 0.3) : 0;
+    const rb = phase === 'run' ? clamp(s / RUN) : phase === 'greet' ? 1 : phase === 'magic' ? 1 - smooth(s / MAGIC / 0.25) : 0;
     ribbons.forEach((r, i) => {
-      const k = i ? 1 : -1, spin = phase === 'magic' ? (s / MAGIC) * (s / MAGIC) * 9 : 0, sc = (phase === 'magic' ? 1 + (s / MAGIC) * 1.6 : 0.9 + 0.1 * Math.sin(time * 1.5 + i)) * (i ? 0.9 : 1.1);
+      const k = i ? 1 : -1, spin = 0, sc = (0.9 + 0.1 * Math.sin(time * 1.5 + i)) * (i ? 0.9 : 1.1);
       r.position.set(santa.position.x + k * 0.15, santa.position.y + 1.2, santa.position.z + k * 0.25);
       r.rotation.z = (i ? 0.45 : -0.15) + Math.sin(time * 0.9 + i * 2) * 0.12 + k * spin;
       r.scale.set((i ? -1 : 1) * sc, sc, 1);
@@ -328,25 +323,33 @@ export function createStage(container, cb) {
       const f = Math.min(1, dt * 5); rcx += (tx - rcx) * f; rcy += (ty - rcy) * f; rhs += (ths - rhs) * f;
     }
     if (vortex > 0.01) {
-      vort.visible = true;
-      for (let i = 0; i < VN; i++) {
-        const d = vd[i]; const th = time * 1.15 * d.sp + d.arc - d.u * 2.3;
-        const c = Math.cos(th), sn = Math.sin(th);
-        const sc = rhs * (1.12 + 0.3 * d.off * (0.4 + d.u) + 0.04 * Math.sin(time * 2 + d.arc));
-        vPos[i * 3] = rcx + Math.sign(c) * Math.sqrt(Math.abs(c)) * sc;
-        vPos[i * 3 + 1] = rcy + Math.sign(sn) * Math.sqrt(Math.abs(sn)) * sc;
-        vPos[i * 3 + 2] = rcz + sn * 0.4 + (d.off - 0.5) * 0.3;
-        const a = vortex * 0.42 * Math.pow(1 - d.u, 1.1) * (0.55 + 0.45 * Math.sin(time * 7 + i));
-        vCol[i * 3] = d.c[0] * a; vCol[i * 3 + 1] = d.c[1] * a; vCol[i * 3 + 2] = d.c[2] * a;
+      // des étincelles naissent en continu sur l'anneau, avec une vitesse tangente : elles filent, s'éteignent, puis d'autres naissent
+      vAcc += dt * vortex * (reduced ? 700 : 2400);
+      const n = Math.min(Math.floor(vAcc), 160); vAcc -= Math.floor(vAcc);
+      for (let k = 0; k < n; k++) {
+        const th = Math.random() * 6.283, R = rhs * (1.0 + 0.5 * Math.pow(Math.random(), 1.2));
+        const cx = Math.cos(th), sy = Math.sin(th), w = 1.4 * R;
+        spawn(rcx + cx * R, rcy + sy * R, rcz + sy * 0.4 + (Math.random() - 0.5) * 0.3, -sy * w, cx * w, 0, 1.3 + Math.random() * 1.2, 0.07 + Math.random() * 0.13, 0.9, 1, R);
       }
-      vGeo.attributes.position.needsUpdate = true; vGeo.attributes.color.needsUpdate = true;
-    } else vort.visible = false;
+    }
     // particules : position += vitesse * dt ; durée restante -= dt ; opacité = durée restante / durée initiale
     for (let i = 0; i < PN; i++) {
       if (pLife[i] > 0) {
         pLife[i] -= dt;
         if (pLife[i] <= 0) { pAlpha[i] = 0; pSize[i] = 0; pPos[i * 3 + 1] = -99; continue; }
         const f = pLife[i] / pMax[i];
+        if (pK[i] === 1) {
+          // tourbillon : la vitesse est ramenée vers le sens de rotation autour du centre, et un ressort garde la particule sur son rayon
+          const dx = pPos[i * 3] - rcx, dy = pPos[i * 3 + 1] - rcy, r = Math.hypot(dx, dy) + 1e-4, R = pR[i];
+          const tx = -dy / r, ty = dx / r, w = 1.4 * R, k = Math.min(1, dt * 3.5), rad = (r - R) * 7 * dt;
+          pVel[i * 3] += (tx * w - pVel[i * 3]) * k - (dx / r) * rad;
+          pVel[i * 3 + 1] += (ty * w - pVel[i * 3 + 1]) * k - (dy / r) * rad;
+          pPos[i * 3] += pVel[i * 3] * dt; pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+          const tw2 = 0.65 + 0.35 * Math.sin(time * 9 + pPh[i] * 5);
+          pAlpha[i] = Math.min(1, f * 2) * Math.min(1, (1 - f) * 8 + 0.2) * tw2; pSize[i] = pS0[i] * (0.5 + 0.5 * f) * (0.85 + 0.15 * tw2);
+          pRot[i] = pPh[i] + time * 0.8;
+          continue;
+        }
         pPos[i * 3] += pVel[i * 3] * dt; pPos[i * 3 + 1] += pVel[i * 3 + 1] * dt; pPos[i * 3 + 2] += pVel[i * 3 + 2] * dt;
         const dr = Math.pow(0.5, dt * 2.2);
         pVel[i * 3] = pVel[i * 3] * dr + Math.sin(time * 2.3 + pPh[i]) * dt * 0.5;
