@@ -274,9 +274,9 @@ export function createStage(container, cb) {
 
   /* État */
   let lastSX = null, lastSZ = null, lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
-  const RUN = reduced ? 1.4 : 3.2, SETTLE = 0.4, HOLD = reduced ? 0.4 : 0.8, FLY = reduced ? 0.9 : 1.5, PAUSE = reduced ? 0.5 : 1.0, SMILE = reduced ? 0.7 : 1.2, MAGIC = reduced ? 1.6 : 3.4;
+  const RUN = reduced ? 1.6 : 4.2, SETTLE = 0.4, HOLD = reduced ? 0.4 : 0.8, FLY = reduced ? 0.9 : 1.5, PAUSE = reduced ? 0.5 : 1.0, SMILE = reduced ? 0.7 : 1.2, MAGIC = reduced ? 1.6 : 3.4;
   const T_FLY = SETTLE + HOLD, T_LAND = T_FLY + FLY, T_SMILE = T_LAND + PAUSE, T_END = T_SMILE + SMILE;
-  let stepPh = 0, lastS = 0, gx = 0, gy = 0, gz = 0, landed = false, smiled = false, gAlpha = 1;
+  let lastRun2 = false, stepPh = 0, lastS = 0, gx = 0, gy = 0, gz = 0, landed = false, smiled = false, gAlpha = 1;
   const G0 = new THREE.Vector3(), G1 = new THREE.Vector3(), GC = new THREE.Vector3(), GP = new THREE.Vector3(), GW = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   function restart() { lastZ = null; lastSX = lastSZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; stepPh = 0; lastS = 0; landed = smiled = false; gAlpha = 1; santa.visible = true; sShadow.visible = true; giftSpr.visible = false; halo.visible = false; santa.rotation.set(0, 0, 0); santa.scale.setScalar(1); cb.onPhase('run'); }
@@ -295,20 +295,20 @@ export function createStage(container, cb) {
     const auraX = lastSX === null ? santa.position.x : lastSX, auraZ = lastSZ === null ? santa.position.z : lastSZ;
     const SZ = stopZ(); let fkBase = 1;
     if (phase === 'run') {
-      const u = clamp(s / RUN), e = 1 - Math.pow(1 - u, 2.4), z0 = -16;
+      const u = clamp(s / RUN), e = 1 - Math.pow(1 - u, 2.0), z0 = -21;
       const vN = Math.pow(1 - u, 1.4);                         // vitesse relative : il ralentit en arrivant
       stepPh += dt * (3.2 + 6.8 * vN);
-      const sn = Math.sin(stepPh), b = smooth(clamp(0.5 + 2.6 * sn));
-      santa.position.set(sn * 0.05 * vN, Math.abs(Math.cos(stepPh)) * 0.11 * (0.35 + 0.65 * vN), z0 + (SZ - z0) * e);
+      const sn = Math.sin(stepPh), b = sn >= 0;
+      santa.position.set(sn * 0.05 * vN, Math.abs(Math.cos(stepPh)) * 0.13 * (0.35 + 0.65 * vN), z0 + (SZ - z0) * e);
       santa.rotation.set(0, 0, sn * 0.035 * vN); santa.scale.set(1 - 0.012 * sn * sn, 1 + 0.02 * Math.cos(stepPh * 2) * vN, 1);
-      setPose({ run: 1, run2: b });
+      lastRun2 = b; setPose(b ? { run2: 1 } : { run: 1 });
       if (Math.floor(stepPh / Math.PI) !== Math.floor((stepPh - dt * (3.2 + 6.8 * vN)) / Math.PI) && vN > 0.12 && !reduced) emit(7, tmp.set(santa.position.x, 0.08, santa.position.z + 0.2), 0.9 * (0.4 + vN), true, 0.3);
-      if (u >= 1) { phase = 'give'; t0 = time; landed = smiled = false; }
+      if (u >= 1) { phase = 'give'; t0 = time; landed = smiled = false; if (!reduced) emit(46, tmp.set(santa.position.x, 0.1, santa.position.z + 0.3), 1.8, true, 0.9); }
     } else if (phase === 'give') {
       const br = Math.sin(s * 2.3), wg = smooth(s / SETTLE);
       const sq = s < SETTLE ? Math.sin(Math.PI * s / SETTLE) : 0;      // petit tassement à l'arrêt
       santa.position.set(0, 0, SZ); santa.rotation.set(0, 0, 0); santa.scale.set(1 + 0.025 * sq, 1 - 0.035 * sq + 0.006 * br, 1);
-      let w = { run: 1 - wg, run2: 0, give: wg };
+      let w = s < 0.1 ? (lastRun2 ? { run2: 1 } : { run: 1 }) : { give: 1 };
       if (s >= T_FLY) w = { give0: 1 };
       if (s >= T_SMILE) { const k = smooth((s - T_SMILE) / 0.16); w = { give0: 1 - k, smile: k }; if (!smiled) { smiled = true; emit(reduced ? 40 : 150, tmp.set(0, HS * 0.62, SZ + 0.5), 2.0, true, 0.7); } }
       setPose(w);
