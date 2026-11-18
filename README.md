@@ -1,4 +1,4 @@
-# Mystère de Noël — Team RH Colas
+# Mystère de Noël Team RH Colas
 https://devfwfw.github.io/santa/
 
 Application Secret Santa pour l'équipe. Chaque collègue reçoit un lien personnel : le Père Noël arrive en courant, annonce que son ami secret est tout proche, puis la magie opère dans un tourbillon de neige scintillante qui révèle la photo et le nom de la personne à qui offrir un cadeau.
