@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import santaRunImg from './assets/santa_run.png';
+import santaRun0Img from './assets/santa_run0.png';
+import santaRun1Img from './assets/santa_run1.png';
 import santaRun2Img from './assets/santa_run2.png';
+import santaRun3Img from './assets/santa_run3.png';
 import santaGiveImg from './assets/santa_give.png';
 import santaGive0Img from './assets/santa_give0.png';
 import santaSmileImg from './assets/santa_smile.png';
@@ -179,7 +181,7 @@ export function createStage(container, cb) {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: stTex(u), transparent: true, side: THREE.DoubleSide, color: 0xe4ecff, depthWrite: false, opacity: 0 }));
     m.renderOrder = order; m.visible = false; santa.add(m); return m;
   };
-  const P = { run: mkPose(santaRunImg, 0.729, 5), run2: mkPose(santaRun2Img, 0.729, 5.1), give: mkPose(santaGiveImg, 0.4556, 6), give0: mkPose(santaGive0Img, 0.4556, 6.1), smile: mkPose(santaSmileImg, 0.5956, 6.2) };
+  const P = { r0: mkPose(santaRun0Img, 0.689, 5), r1: mkPose(santaRun1Img, 0.689, 5.1), r2: mkPose(santaRun2Img, 0.689, 5.2), r3: mkPose(santaRun3Img, 0.689, 5.3), give: mkPose(santaGiveImg, 0.4556, 6), give0: mkPose(santaGive0Img, 0.4556, 6.1), smile: mkPose(santaSmileImg, 0.5956, 6.2) };
   const setPose = (w) => { for (const k in P) { const o = w[k] || 0; P[k].material.opacity = o; P[k].visible = o > 0.003; } };
   const GIFT_LOCAL = [(0.504 - 0.5) * HS * 0.4556, HS * 0.57, 0.08], GIFT_W0 = HS * 0.118;
   const giftGeo2 = new THREE.PlaneGeometry(1, 287 / 300);
@@ -276,10 +278,10 @@ export function createStage(container, cb) {
   let lastSX = null, lastSZ = null, lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
   const RUN = reduced ? 1.6 : 4.2, SETTLE = 0.4, HOLD = reduced ? 0.4 : 0.8, FLY = reduced ? 0.9 : 1.5, PAUSE = reduced ? 0.5 : 1.0, SMILE = reduced ? 0.7 : 1.2, MAGIC = reduced ? 1.6 : 3.4;
   const T_FLY = SETTLE + HOLD, T_LAND = T_FLY + FLY, T_SMILE = T_LAND + PAUSE, T_END = T_SMILE + SMILE;
-  let lastRun2 = false, stepPh = 0, lastS = 0, gx = 0, gy = 0, gz = 0, landed = false, smiled = false, gAlpha = 1;
+  let lastRun = 0, appeared = false, stepPh = 0, lastS = 0, gx = 0, gy = 0, gz = 0, landed = false, smiled = false, gAlpha = 1;
   const G0 = new THREE.Vector3(), G1 = new THREE.Vector3(), GC = new THREE.Vector3(), GP = new THREE.Vector3(), GW = new THREE.Vector3();
   const tmp = new THREE.Vector3();
-  function restart() { lastZ = null; lastSX = lastSZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; stepPh = 0; lastS = 0; landed = smiled = false; gAlpha = 1; santa.visible = true; sShadow.visible = true; giftSpr.visible = false; halo.visible = false; santa.rotation.set(0, 0, 0); santa.scale.setScalar(1); cb.onPhase('run'); }
+  function restart() { lastZ = null; lastSX = lastSZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; stepPh = 0; lastS = 0; landed = smiled = appeared = false; gAlpha = 1; santa.visible = true; sShadow.visible = true; giftSpr.visible = false; halo.visible = false; santa.rotation.set(0, 0, 0); santa.scale.setScalar(1); cb.onPhase('run'); }
   function magic() { if (phase !== 'greet') return; phase = 'magic'; t0 = time; flashed = revealed = false; cb.onPhase('magic'); }
   renderer.domElement.addEventListener('click', () => cb.onClick && cb.onClick());
 
@@ -297,18 +299,19 @@ export function createStage(container, cb) {
     if (phase === 'run') {
       const u = clamp(s / RUN), e = 1 - Math.pow(1 - u, 2.0), z0 = -21;
       const vN = Math.pow(1 - u, 1.4);                         // vitesse relative : il ralentit en arrivant
-      stepPh += dt * (3.2 + 6.8 * vN);
-      const sn = Math.sin(stepPh), b = sn >= 0;
+      const dPh = dt * (3.2 + 6.8 * vN) / 0.66;                // 1 image de pas = π de phase (4 images par cycle)
+      stepPh += dPh;
+      const sn = Math.sin(stepPh), idx = Math.floor(stepPh / Math.PI) % 4;
       santa.position.set(sn * 0.05 * vN, Math.abs(Math.cos(stepPh)) * 0.13 * (0.35 + 0.65 * vN), z0 + (SZ - z0) * e);
       santa.rotation.set(0, 0, sn * 0.035 * vN); santa.scale.set(1 - 0.012 * sn * sn, 1 + 0.02 * Math.cos(stepPh * 2) * vN, 1);
-      lastRun2 = b; setPose(b ? { run2: 1 } : { run: 1 });
-      if (Math.floor(stepPh / Math.PI) !== Math.floor((stepPh - dt * (3.2 + 6.8 * vN)) / Math.PI) && vN > 0.12 && !reduced) emit(7, tmp.set(santa.position.x, 0.08, santa.position.z + 0.2), 0.9 * (0.4 + vN), true, 0.3);
+      lastRun = idx; setPose({ ['r' + idx]: 1 });
+      if (Math.floor(stepPh / Math.PI) !== Math.floor((stepPh - dPh) / Math.PI) && vN > 0.12 && !reduced) emit(7, tmp.set(santa.position.x, 0.08, santa.position.z + 0.2), 0.9 * (0.4 + vN), true, 0.3);
       if (u >= 1) { phase = 'give'; t0 = time; landed = smiled = false; if (!reduced) emit(46, tmp.set(santa.position.x, 0.1, santa.position.z + 0.3), 1.8, true, 0.9); }
     } else if (phase === 'give') {
       const br = Math.sin(s * 2.3), wg = smooth(s / SETTLE);
       const sq = s < SETTLE ? Math.sin(Math.PI * s / SETTLE) : 0;      // petit tassement à l'arrêt
       santa.position.set(0, 0, SZ); santa.rotation.set(0, 0, 0); santa.scale.set(1 + 0.025 * sq, 1 - 0.035 * sq + 0.006 * br, 1);
-      let w = s < 0.1 ? (lastRun2 ? { run2: 1 } : { run: 1 }) : { give: 1 };
+      let w = s < 0.1 ? { ['r' + lastRun]: 1 } : { give: 1 };
       if (s >= T_FLY) w = { give0: 1 };
       if (s >= T_SMILE) { const k = smooth((s - T_SMILE) / 0.16); w = { give0: 1 - k, smile: k }; if (!smiled) { smiled = true; emit(reduced ? 40 : 150, tmp.set(0, HS * 0.62, SZ + 0.5), 2.0, true, 0.7); } }
       setPose(w);
@@ -317,6 +320,11 @@ export function createStage(container, cb) {
       rv.set(0, -0.62, 0.5).unproject(camera).sub(camera.position).normalize(); G1.copy(camera.position).addScaledVector(rv, 2.4);
       G0.set(santa.position.x + GIFT_LOCAL[0], santa.position.y + GIFT_LOCAL[1], santa.position.z + GIFT_LOCAL[2]);
       const gw1 = 0.33;
+      if (s >= 0.1 && s < T_FLY) {                              // le cadeau surgit dans ses mains : éclat doré
+        if (!appeared) { appeared = true; if (!reduced) emit(30, tmp.set(G0.x, G0.y, G0.z + 0.1), 0.8, true, 0.12); }
+        const f = Math.exp(-(s - 0.1) * 4.5);
+        halo.visible = true; halo.position.set(G0.x, G0.y, G0.z + 0.05); halo.scale.setScalar(GIFT_W0 * (2.4 + 3.2 * f)); halo.material.opacity = 0.75 * f;
+      }
       if (s >= T_FLY) {
         const p = clamp((s - T_FLY) / FLY), e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
         GC.set((G0.x + G1.x) / 2, Math.max(G0.y, G1.y) + 0.9, (G0.z + G1.z) / 2 + 0.6);
