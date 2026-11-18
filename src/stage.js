@@ -14,6 +14,10 @@ import tree5Img from './assets/tree7.png';
 import gift1Img from './assets/gift1.png';
 import gift2Img from './assets/gift2.png';
 import gift3Img from './assets/gift3.png';
+import gift4Img from './assets/gift4.png';
+import gift5Img from './assets/gift5.png';
+import gift6Img from './assets/gift6.png';
+import gift7Img from './assets/gift7.png';
 import fondImg from './assets/fond.jpg';
 
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -134,7 +138,7 @@ export function createStage(container, cb) {
     mat.userData.u = u; return mat;
   }
   /* Cadeaux générés avec Magnific, posés au sol au pied des sapins */
-  const giftDefs = [[gift1Img, 320 / 300], [gift2Img, 287 / 300], [gift3Img, 314 / 300]].map(([u, r]) => {
+  const giftDefs = [[gift1Img, 320 / 300], [gift2Img, 287 / 300], [gift3Img, 314 / 300], [gift4Img, 306 / 300], [gift5Img, 327 / 300], [gift6Img, 314 / 300], [gift7Img, 285 / 300]].map(([u, r]) => {
     const g = new THREE.PlaneGeometry(1, r); g.translate(0, r / 2 - 0.05, 0);
     return { g, m: new THREE.MeshBasicMaterial({ map: loadTex(u), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, color: 0xb9c8ec }) };
   });
@@ -278,10 +282,10 @@ export function createStage(container, cb) {
   let lastSX = null, lastSZ = null, lastZ = null, phase = 'run', t0 = 0, time = 0, raf = 0, vortex = 0, flashed = false, revealed = false;
   const RUN = reduced ? 1.6 : 4.2, SETTLE = 0.4, HOLD = reduced ? 0.4 : 0.8, FLY = reduced ? 0.9 : 1.5, PAUSE = reduced ? 0.5 : 1.0, SMILE = reduced ? 0.7 : 1.2, MAGIC = reduced ? 1.6 : 3.4;
   const T_FLY = SETTLE + HOLD, T_LAND = T_FLY + FLY, T_SMILE = T_LAND + PAUSE, T_END = T_SMILE + SMILE;
-  let lastRun = 0, appeared = false, stepPh = 0, lastS = 0, gx = 0, gy = 0, gz = 0, landed = false, smiled = false, gAlpha = 1;
+  let lastRun = 0, fIdx = 0, fAcc = 0, fLen = 1, appeared = false, stepPh = 0, lastS = 0, gx = 0, gy = 0, gz = 0, landed = false, smiled = false, gAlpha = 1;
   const G0 = new THREE.Vector3(), G1 = new THREE.Vector3(), GC = new THREE.Vector3(), GP = new THREE.Vector3(), GW = new THREE.Vector3();
   const tmp = new THREE.Vector3();
-  function restart() { lastZ = null; lastSX = lastSZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; stepPh = 0; lastS = 0; landed = smiled = appeared = false; gAlpha = 1; santa.visible = true; sShadow.visible = true; giftSpr.visible = false; halo.visible = false; santa.rotation.set(0, 0, 0); santa.scale.setScalar(1); cb.onPhase('run'); }
+  function restart() { lastZ = null; lastSX = lastSZ = null; phase = 'run'; t0 = time; vortex = 0; flashed = revealed = false; stepPh = 0; fIdx = 0; fAcc = 0; fLen = 1; lastS = 0; landed = smiled = appeared = false; gAlpha = 1; santa.visible = true; sShadow.visible = true; giftSpr.visible = false; halo.visible = false; santa.rotation.set(0, 0, 0); santa.scale.setScalar(1); cb.onPhase('run'); }
   function magic() { if (phase !== 'greet') return; phase = 'magic'; t0 = time; flashed = revealed = false; cb.onPhase('magic'); }
   renderer.domElement.addEventListener('click', () => cb.onClick && cb.onClick());
 
@@ -299,13 +303,23 @@ export function createStage(container, cb) {
     if (phase === 'run') {
       const u = clamp(s / RUN), e = 1 - Math.pow(1 - u, 2.0), z0 = -21;
       const vN = Math.pow(1 - u, 1.4);                         // vitesse relative : il ralentit en arrivant
-      const dPh = dt * (3.2 + 6.8 * vN) / 0.66;                // 1 image de pas = π de phase (4 images par cycle)
-      stepPh += dPh;
-      const sn = Math.sin(stepPh), idx = Math.floor(stepPh / Math.PI) % 4;
-      santa.position.set(sn * 0.05 * vN, Math.abs(Math.cos(stepPh)) * 0.13 * (0.35 + 0.65 * vN), z0 + (SZ - z0) * e);
-      santa.rotation.set(0, 0, sn * 0.035 * vN); santa.scale.set(1 - 0.012 * sn * sn, 1 + 0.02 * Math.cos(stepPh * 2) * vN, 1);
+      // cadence : fréquence des pas qui ralentit, durée de chaque appui légèrement irrégulière (plus naturel qu'un métronome)
+      const fps = (3.2 + 6.8 * vN) / (Math.PI * 0.66);
+      fAcc += dt * fps / fLen; let foot = false;
+      if (fAcc >= 1) { fAcc -= 1; fIdx++; fLen = 0.82 + Math.random() * 0.36; foot = true; }
+      const idx = fIdx % 4, fa = clamp(fAcc), air = Math.sin(Math.PI * fa);       // air = 0 à l'appui, 1 en pleine foulée
+      const sn = Math.cos(Math.PI * ((fIdx % 2) + fa));                            // balancement gauche/droite continu
+      const sq = Math.pow(1 - air, 6) * vN;                                        // écrasement à la réception du pied
+      santa.position.set(sn * 0.05 * vN, Math.pow(air, 0.8) * 0.12 * (0.3 + 0.7 * vN), z0 + (SZ - z0) * e);
+      const lean = 0.06 * vN - 0.075 * smooth(clamp((u - 0.78) / 0.22));           // penché en avant, puis en arrière en freinant
+      santa.rotation.set(lean, sn * 0.07 * vN, sn * 0.04 * vN);
+      santa.scale.set(1 + 0.03 * sq, 1 - 0.035 * sq + 0.015 * air * vN, 1);
       lastRun = idx; setPose({ ['r' + idx]: 1 });
-      if (Math.floor(stepPh / Math.PI) !== Math.floor((stepPh - dPh) / Math.PI) && vN > 0.12 && !reduced) emit(7, tmp.set(santa.position.x, 0.08, santa.position.z + 0.2), 0.9 * (0.4 + vN), true, 0.3);
+      if (foot && !reduced) {                                                      // poussière magique sous le pied qui se pose
+        const side = idx % 2 === 0 ? 1 : -1, k = 0.5 + 0.5 * vN;
+        emit(Math.round(10 + 12 * k), tmp.set(santa.position.x + side * 0.2, 0.07, santa.position.z + 0.18), 0.55 + 0.6 * k, true, 0.28);
+        emit(Math.round(6 + 6 * k), tmp.set(santa.position.x + side * 0.2, 0.1, santa.position.z + 0.18), 0.4 + 0.3 * k, false, 0.2);
+      }
       if (u >= 1) { phase = 'give'; t0 = time; landed = smiled = false; if (!reduced) emit(46, tmp.set(santa.position.x, 0.1, santa.position.z + 0.3), 1.8, true, 0.9); }
     } else if (phase === 'give') {
       const br = Math.sin(s * 2.3), wg = smooth(s / SETTLE);
