@@ -61,8 +61,8 @@ function toast(msg) {
 
 /* ---------- Marque ---------- */
 function brand(extra = '') {
-  return `<header class="brand"><img class="logo" src="${colasLogo}" alt="Colas — We open the way">
-  <div class="sep" aria-hidden="true"></div><div class="ttl"><b>${APP}</b><small>${TEAM} · 2026</small></div>${extra}</header>`;
+  return `<header class="brand"><img class="logo" src="${colasLogo}" alt="Colas — We open the way">${extra}</header>
+  <div class="theme"><b>${APP}</b><small>${TEAM} · 2026</small></div>`;
 }
 
 const EXAMPLE = `Camille > Mehdi
