@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mystère de Noël — Team RH Colas</title>
+<title>Mystère de Noël Team RH Colas</title>
 <style>
 /*FONTS*/
 :root{--creme:#EAF6FF;--sapin:#1F4D3A;--houx:#B3202A;--or:#F7CD3A;--gui:#2E6B4F;
@@ -141,10 +141,13 @@ textarea#map{font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.7}
 .muted{opacity:.5;font-size:.85rem}
 
 /* Habillage « Nuit et or » : cartes pleines, sans verre ni brillance, même famille que le décor */
-.brand{top:16px;left:18px;right:auto;padding:9px 24px 9px 16px;gap:14px;border-radius:999px;background:linear-gradient(170deg,#0B2447 0%,#06183A 100%);box-shadow:0 0 0 1.5px var(--or),0 10px 22px rgba(0,5,20,.5)}
-.brand::before{content:none}
-.brand .logo{height:44px}.brand .sep{height:30px}
-.brand .back{margin-left:6px;background:transparent;border:1px solid rgba(247,205,58,.6)}
+.brand{top:0;left:0;right:auto;padding:22px 26px;gap:16px}
+.brand::before{content:'';position:fixed;left:0;top:0;right:0;height:104px;background:linear-gradient(rgba(1,14,37,.78),rgba(1,14,37,.35) 60%,rgba(1,14,37,0));z-index:-1;pointer-events:none}
+.brand .logo{height:50px}
+.brand .back{margin-left:0;background:rgba(1,14,37,.55);border:1px solid rgba(247,205,58,.6)}
+.theme{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:61;text-align:center;pointer-events:none;white-space:nowrap;text-shadow:0 2px 14px rgba(1,14,37,.9),0 0 4px rgba(1,14,37,.8)}
+.theme b{display:block;font-family:var(--script);font-weight:400;font-size:2.1rem;line-height:1.1;color:var(--creme)}
+.theme small{display:block;margin-top:4px;font-family:"Fredoka","Nunito",sans-serif;font-weight:600;font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:#A9DCF5}
 .canvas-wrap::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 58%,transparent 42%,rgba(1,14,37,.6) 100%)}
 .greet,.modal-card{position:relative;border:0;border-radius:28px;font-weight:500;background:linear-gradient(170deg,#0B2447 0%,#06183A 100%);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:0 0 0 1.5px var(--or),0 26px 50px rgba(0,8,20,.55),0 0 60px rgba(4,62,138,.35)}
 .greet::before,.modal-card::before{content:"";position:absolute;left:0;right:0;top:0;height:26px;border-radius:28px 28px 0 0;pointer-events:none;background:linear-gradient(#E8F1FA,#E8F1FA) 0 0/100% 6px no-repeat,radial-gradient(circle at 50% 0,#E8F1FA 0 11px,transparent 12px) 0 0/30px 22px repeat-x,radial-gradient(circle at 50% 0,#E8F1FA 0 7px,transparent 8px) 15px 0/41px 26px repeat-x}
@@ -169,7 +172,7 @@ textarea#map{font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.7}
 .note{color:var(--creme);font-weight:500;text-shadow:0 1px 10px var(--nuit),0 0 3px var(--nuit)}
 
 @media (max-width:760px){
- .brand{padding:12px 14px;gap:10px}.brand:has(.back) .sep,.brand:has(.back) .ttl{display:none}.brand .back{margin-left:4px}.brand .logo{height:38px}.brand .sep{height:26px}.brand b{font-size:1.25rem}.brand small{display:none}
+ .brand{padding:14px 14px;gap:10px}.brand .logo{height:34px}.theme{top:62px}.theme b{font-size:1.5rem}.theme small{font-size:.6rem}
  .info{top:12px;right:12px;height:38px;padding:0 13px 0 6px;font-size:.62rem;gap:7px}.info i{width:24px;height:24px}
  .ui{padding:80px 14px 22px}
  .greet{padding:38px 18px 22px}.greet .lead{font-size:.86rem;margin-bottom:.9rem}.greet .btn.big{padding:.95rem 1.4rem;font-size:.74rem}
